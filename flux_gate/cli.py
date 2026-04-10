@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import argparse
 import os
 import sys
 from pathlib import Path
 
+import click
 import yaml
 
 from .auth import ActorsConfig, to_actor_headers
@@ -20,60 +20,43 @@ _ENV_ADVERSARY_TYPE = "FLUX_GATE_ADVERSARY_TYPE"
 _ENV_ADVERSARY_KEY = "FLUX_GATE_ADVERSARY_KEY"
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        prog="flux-gate",
-        description=(
-            "Adversarial inference engine for software correctness. "
-            "Runs a two-agent LLM loop against a locally-running HTTP API and "
-            "outputs a risk report."
-        ),
+@click.command(
+    help=(
+        "Adversarial inference engine for software correctness. "
+        "Runs a two-agent LLM loop against a locally-running HTTP API and "
+        "outputs a risk report."
     )
-    parser.add_argument(
-        "url",
-        help="Base URL of the running API (e.g. http://localhost:8000)",
-    )
-    parser.add_argument(
-        "--spec",
-        default=".flux_gate/spec.yaml",
-        metavar="FILE",
-        help="Path to a FeatureSpec YAML file (default: .flux_gate/spec.yaml)",
-    )
-    parser.add_argument(
-        "--actors",
-        default=".flux_gate/actors.yaml",
-        metavar="FILE",
-        help="Path to an actors YAML file defining per-actor authentication "
-        "(default: .flux_gate/actors.yaml)",
-    )
-    parser.add_argument(
-        "--threshold",
-        type=float,
-        default=0.90,
-        metavar="N",
-        help="Holdout satisfaction score required to recommend merge (default: 0.90)",
-    )
-    parser.add_argument(
-        "--fail-fast",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Stop after the first critical finding "
-        "(default: enabled; use --no-fail-fast to run all iterations)",
-    )
-    return parser
-
-
-def _try_load(path: str) -> Path | None:
-    """Return the path if the file exists, otherwise None."""
-    p = Path(path)
-    return p if p.exists() else None
-
-
-def main() -> None:
-    parser = _build_parser()
-    args = parser.parse_args()
-
-    # LLM operator configuration — required env vars.
+)
+@click.argument("url")
+@click.option(
+    "--spec",
+    default=".flux_gate/spec.yaml",
+    metavar="FILE",
+    show_default=True,
+    help="Path to a FeatureSpec YAML file.",
+)
+@click.option(
+    "--actors",
+    default=".flux_gate/actors.yaml",
+    metavar="FILE",
+    show_default=True,
+    help="Path to an actors YAML file defining per-actor authentication.",
+)
+@click.option(
+    "--threshold",
+    type=float,
+    default=0.90,
+    metavar="N",
+    show_default=True,
+    help="Holdout satisfaction score required to recommend merge.",
+)
+@click.option(
+    "--fail-fast/--no-fail-fast",
+    default=True,
+    show_default=True,
+    help="Stop after the first critical finding.",
+)
+def main(url: str, spec: str, actors: str, threshold: float, fail_fast: bool) -> None:
     operator_type = os.environ.get(_ENV_OPERATOR_TYPE, "")
     operator_key = os.environ.get(_ENV_OPERATOR_KEY, "")
     adversary_type = os.environ.get(_ENV_ADVERSARY_TYPE, "")
@@ -90,7 +73,7 @@ def main() -> None:
         if not val
     ]
     if missing:
-        print(
+        click.echo(
             f"error: missing required environment variables: {', '.join(missing)}\n"
             f"\n"
             f"Set them before running flux-gate:\n"
@@ -98,42 +81,42 @@ def main() -> None:
             f"  export {_ENV_OPERATOR_KEY}=sk-...\n"
             f"  export {_ENV_ADVERSARY_TYPE}=anthropic   # or: openai\n"
             f"  export {_ENV_ADVERSARY_KEY}=sk-ant-...",
-            file=sys.stderr,
+            err=True,
         )
         sys.exit(1)
 
     feature_spec: FeatureSpec | None = None
-    spec_path = _try_load(args.spec)
-    if spec_path is not None:
+    spec_path = Path(spec)
+    if spec_path.exists():
         feature_spec = FeatureSpec(**yaml.safe_load(spec_path.read_text()))
 
     actor_headers: dict[str, dict[str, str]] = {}
-    actors_path = _try_load(args.actors)
-    if actors_path is not None:
+    actors_path = Path(actors)
+    if actors_path.exists():
         actor_headers = to_actor_headers(ActorsConfig(**yaml.safe_load(actors_path.read_text())))
 
-    executor = DeterministicLocalExecutor(HttpExecutor(args.url, actor_headers=actor_headers))
+    executor = DeterministicLocalExecutor(HttpExecutor(url, actor_headers=actor_headers))
     runner = FluxGateRunner(
         executor=executor,
         operator=create_operator(operator_type, operator_key),
         adversary=create_adversary(adversary_type, adversary_key),
         spec_assessor=DemoSpecAssessor() if feature_spec else None,
         feature_spec=feature_spec,
-        gate_threshold=args.threshold,
-        fail_fast_tier=0 if args.fail_fast else None,
-        system_under_test=args.url,
+        gate_threshold=threshold,
+        fail_fast_tier=0 if fail_fast else None,
+        system_under_test=url,
         environment="local",
     )
 
     try:
         run = runner.run()
     except Exception as exc:  # noqa: BLE001
-        print(f"error: {exc}", file=sys.stderr)
+        click.echo(f"error: {exc}", err=True)
         sys.exit(1)
 
-    print(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
+    click.echo(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
 
     gate = run.risk_report.merge_gate
     if gate and gate.recommendation == "block":
-        print(f"gate: BLOCKED — {gate.rationale}", file=sys.stderr)
+        click.echo(f"gate: BLOCKED — {gate.rationale}", err=True)
         sys.exit(1)
