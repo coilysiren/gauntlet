@@ -78,9 +78,7 @@ class DeterministicLocalExecutor:
         step_results: list[ExecutionStepResult] = []
         context: dict[str, object] = {}
         for index, step in enumerate(scenario.steps, start=1):
-            request = step.request.model_copy(
-                update={"path": step.request.path.format(**context)}
-            )
+            request = step.request.model_copy(update={"path": step.request.path.format(**context)})
             response = self._sut.send(step.actor, request)
             step_results.append(
                 ExecutionStepResult(
@@ -116,8 +114,7 @@ def _evaluate_assertion(
             kind=assertion.kind,
             passed=passed,
             detail=(
-                f"expected status {assertion.expected}, "
-                f"got {step_result.response.status_code}"
+                f"expected status {assertion.expected}, got {step_result.response.status_code}"
             ),
         )
 

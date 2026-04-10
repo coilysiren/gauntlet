@@ -4,7 +4,7 @@ import pytest
 
 
 @pytest.mark.docker
-def test_app_service_runs():
+def test_app_service_runs() -> None:
     result = subprocess.run(
         ["docker", "compose", "run", "--rm", "app"],
         capture_output=True,
@@ -15,7 +15,7 @@ def test_app_service_runs():
 
 
 @pytest.mark.docker
-def test_test_service_passes():
+def test_test_service_passes() -> None:
     result = subprocess.run(
         ["docker", "compose", "run", "--rm", "test"],
         capture_output=True,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from .executor import DeterministicLocalExecutor
 from .models import Finding, FluxGateRun, IterationRecord, IterationSpec, RiskReport
 from .roles import Adversary, Operator
@@ -90,11 +92,7 @@ def _build_risk_report(records: list[IterationRecord]) -> RiskReport:
     )
     confirmed_failures = sorted({finding.issue for finding in all_findings})
     suspicious_patterns = sorted(
-        {
-            evidence
-            for finding in all_findings
-            for evidence in finding.evidence
-        }
+        {evidence for finding in all_findings for evidence in finding.evidence}
     )
     unexplored_surfaces = _derive_unexplored_surfaces(all_findings)
     confidence_score = _confidence_score(all_findings)
@@ -125,7 +123,7 @@ def _confidence_score(findings: list[Finding]) -> float:
     return round(max(0.0, 1.0 - average_finding_confidence), 2)
 
 
-def _risk_level(findings: list[Finding]) -> str:
+def _risk_level(findings: list[Finding]) -> Literal["low", "medium", "high", "critical"]:
     if any(finding.severity == "critical" for finding in findings):
         return "critical"
     if any(finding.severity == "high" for finding in findings):

@@ -6,11 +6,11 @@ from .models import (
     Assertion,
     ExecutionResult,
     Finding,
+    HttpRequest,
     IterationRecord,
     IterationSpec,
     Scenario,
     ScenarioStep,
-    HttpRequest,
 )
 
 
@@ -91,7 +91,7 @@ class DemoAdversary:
     ) -> list[Finding]:
         findings: list[Finding] = []
         for result in execution_results:
-            failed_assertions = [assertion for assertion in result.assertions if not assertion.passed]
+            failed_assertions = [a for a in result.assertions if not a.passed]
             if not failed_assertions:
                 continue
 

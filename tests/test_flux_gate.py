@@ -7,7 +7,7 @@ from flux_gate import (
 )
 
 
-def test_runner_produces_four_iteration_report():
+def test_runner_produces_four_iteration_report() -> None:
     runner = FluxGateRunner(
         executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
         operator=DemoOperator(),
@@ -22,7 +22,7 @@ def test_runner_produces_four_iteration_report():
     assert "PATCH /tasks/1" in run.risk_report.coverage
 
 
-def test_demo_scenario_surfaces_authz_failure():
+def test_demo_scenario_surfaces_authz_failure() -> None:
     runner = FluxGateRunner(
         executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
         operator=DemoOperator(),
