@@ -1,7 +1,19 @@
 services:
-  app:
+  api:
     build: .
-    command: uv run python main.py
+    command: uv run python demo_api/server.py
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  demo:
+    build: .
+    command: uv run flux-gate http://api:8000 --name "Demo Task API"
+    depends_on:
+      api:
+        condition: service_healthy
 
   test:
     build: .
