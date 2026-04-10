@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Protocol
+from typing import Any, Protocol
+
+import requests as http
 
 from .models import (
     Assertion,
@@ -16,6 +18,48 @@ from .models import (
 
 class SystemUnderTest(Protocol):
     def send(self, actor: str, request: HttpRequest) -> HttpResponse: ...
+
+
+class HttpExecutor:
+    """Sends real HTTP requests to a locally-running API process.
+
+    Each actor is identified by an ``X-Actor`` header by default. Pass
+    ``actor_headers`` to override with bearer tokens or session cookies.
+
+    Example::
+
+        executor = HttpExecutor(
+            "http://localhost:8000",
+            actor_headers={
+                "userA": {"Authorization": "Bearer token-a"},
+                "userB": {"Authorization": "Bearer token-b"},
+            },
+        )
+    """
+
+    def __init__(
+        self,
+        base_url: str,
+        actor_headers: dict[str, dict[str, str]] | None = None,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._actor_headers = actor_headers or {}
+
+    def send(self, actor: str, request: HttpRequest) -> HttpResponse:
+        headers = {"X-Actor": actor, **self._actor_headers.get(actor, {})}
+        resp = http.request(
+            request.method,
+            f"{self._base_url}{request.path}",
+            json=request.body if request.body else None,
+            headers=headers,
+            timeout=10,
+        )
+        body: dict[str, Any]
+        try:
+            body = resp.json()
+        except ValueError:
+            body = {"_raw": resp.text}
+        return HttpResponse(status_code=resp.status_code, body=body)
 
 
 class InMemoryTaskAPI:

@@ -1,4 +1,4 @@
-from .executor import DeterministicLocalExecutor, InMemoryTaskAPI
+from .executor import DeterministicLocalExecutor, HttpExecutor, InMemoryTaskAPI
 from .loop import FluxGateRunner, build_default_iteration_specs
 from .models import (
     Assertion,
@@ -23,6 +23,7 @@ __all__ = [
     "DemoAdversary",
     "DemoOperator",
     "DeterministicLocalExecutor",
+    "HttpExecutor",
     "ExecutionResult",
     "ExecutionStepResult",
     "Finding",

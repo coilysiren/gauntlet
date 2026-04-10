@@ -16,51 +16,86 @@ uv add flux-gate
 
 ## Quick start
 
-```python
-import yaml
-from flux_gate import (
-    DemoAdversary,
-    DemoOperator,
-    DeterministicLocalExecutor,
-    FluxGateRunner,
-    InMemoryTaskAPI,
-)
+Start your API, then point Flux Gate at it:
 
-runner = FluxGateRunner(
-    executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
-    operator=DemoOperator(),
-    adversary=DemoAdversary(),
-)
+```bash
+# start your API in one terminal
+python myapp.py  # listening on http://localhost:8000
 
-run = runner.run()
-print(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
+# run flux-gate in another
+flux-gate http://localhost:8000
+```
+
+Output is YAML:
+
+```yaml
+system_under_test: localhost:8000
+environment: local
+iterations:
+  - spec:
+      index: 1
+      name: broad_baseline
+      ...
+risk_report:
+  confidence_score: 0.06
+  risk_level: critical
+  confirmed_failures:
+    - unauthorized_cross_user_modification
+  coverage:
+    - GET /tasks/1
+    - PATCH /tasks/1
+    - POST /tasks
+  conclusion: >-
+    System fails under adversarial pressure and should not be promoted
+    without remediation.
 ```
 
 ## Usage
 
-### Bring your own system under test
+### CLI
 
-Replace `InMemoryTaskAPI` with any object that implements `send(actor, request) -> HttpResponse`:
-
-```python
-import requests as http
-from flux_gate import FluxGateRunner, DeterministicLocalExecutor, HttpRequest, HttpResponse
-
-class LiveAPI:
-    def __init__(self, base_url: str) -> None:
-        self._base_url = base_url
-
-    def send(self, actor: str, request: HttpRequest) -> HttpResponse:
-        resp = http.request(
-            request.method,
-            f"{self._base_url}{request.path}",
-            json=request.body or None,
-            headers={"X-Actor": actor},
-        )
-        return HttpResponse(status_code=resp.status_code, body=resp.json())
+```
+flux-gate <url> [--name NAME] [--env ENV]
 ```
 
-### Bring your own Operator and Adversary
+| Argument | Default | Description |
+|---|---|---|
+| `url` | required | Base URL of the running API |
+| `--name` | URL hostname | Label for the system under test in the report |
+| `--env` | `local` | Environment label (e.g. `staging`, `ci`) |
+
+```bash
+flux-gate http://localhost:8000
+flux-gate http://localhost:8000 --name "Task API" --env staging
+```
+
+### Actor authentication
+
+Flux Gate runs scenarios as named actors (e.g. `userA`, `userB`). By default it
+passes the actor name in an `X-Actor` header. To use real credentials, pass
+`actor_headers` when constructing `HttpExecutor` directly:
+
+```python
+from flux_gate import DeterministicLocalExecutor, HttpExecutor, FluxGateRunner
+from flux_gate.roles import DemoAdversary, DemoOperator
+
+runner = FluxGateRunner(
+    executor=DeterministicLocalExecutor(
+        HttpExecutor(
+            "http://localhost:8000",
+            actor_headers={
+                "userA": {"Authorization": "Bearer token-a"},
+                "userB": {"Authorization": "Bearer token-b"},
+            },
+        )
+    ),
+    operator=DemoOperator(),
+    adversary=DemoAdversary(),
+)
+run = runner.run()
+```
+
+### Custom Operator and Adversary
 
 Implement either protocol to plug in an LLM-backed agent:
 
@@ -87,32 +122,21 @@ class LLMAdversary:
     ) -> list[Finding]:
         # call your LLM, parse response into Finding objects
         ...
-
-runner = FluxGateRunner(
-    executor=DeterministicLocalExecutor(LiveAPI("https://api.example.com")),
-    operator=LLMOperator(),
-    adversary=LLMAdversary(),
-)
-run = runner.run()
 ```
 
-### Inspect the results
+### Reading the report
 
 ```python
 run = runner.run()
 
-# top-level risk verdict
-print(run.risk_report.risk_level)        # "low" | "medium" | "high" | "critical"
-print(run.risk_report.confidence_score)  # float 0.0–1.0
-print(run.risk_report.confirmed_failures)
+print(run.risk_report.risk_level)         # "low" | "medium" | "high" | "critical"
+print(run.risk_report.confidence_score)   # float 0.0–1.0
+print(run.risk_report.confirmed_failures) # list of issue identifiers
+print(run.risk_report.coverage)           # ["GET /tasks/1", "PATCH /tasks/1", ...]
 
-# per-iteration findings
 for iteration in run.iterations:
     for finding in iteration.findings:
         print(finding.severity, finding.issue, finding.rationale)
-
-# coverage
-print(run.risk_report.coverage)          # ["GET /tasks/1", "PATCH /tasks/1", ...]
 ```
 
 ## Core Model
