@@ -1,6 +1,6 @@
-# Flux Gate
+# ⚡🔄🛂 Flux Gate
 
-Flux Gate is a two-agent adversarial loop that infers software correctness by observing how code behaves under sustained, targeted attack, and is designed as quality control for a dark factory environment.
+Flux Gate is a two-agent adversarial loop that infers software correctness by observing how code behaves under sustained, targeted attack. It's designed as quality control for a dark factory environment — where code is written by bots and verified by attack.
 
 ## Quick start
 
@@ -30,21 +30,16 @@ flux-gate http://localhost:8000
 Output is YAML:
 
 ```yaml
-system_under_test: localhost:8000
+system_under_test: Task API (staging)
 environment: local
-iterations:
-  - spec:
-      index: 1
-      name: broad_baseline
-      ...
 risk_report:
   confidence_score: 0.06
   risk_level: critical
   confirmed_failures:
-    - unauthorized_cross_user_modification
+    - unauthorized_cross_user_modification   # userB rewrote userA's task
   coverage:
-    - GET /tasks/1
-    - PATCH /tasks/1
+    - GET /tasks/42
+    - PATCH /tasks/42
     - POST /tasks
   conclusion: >-
     System fails under adversarial pressure and should not be promoted
@@ -236,28 +231,28 @@ scenario:
   category: authz
 
   steps:
-    - actor: userA
+    - actor: alice                      # alice creates a task
       request:
         method: POST
         path: /tasks
         body:
-          title: "private task"
+          title: "Q3 budget review"
 
-    - actor: userB
+    - actor: bob                        # bob tries to check it off
       request:
         method: PATCH
         path: /tasks/{id}
         body:
           completed: true
 
-    - actor: userA
+    - actor: alice                      # alice checks her task
       request:
         method: GET
         path: /tasks/{id}
 
   assertions:
     - type: status_code
-      expected: 403
+      expected: 403                     # bob should have been stopped
 
     - type: invariant
       rule: task_not_modified_by_other_user
@@ -270,20 +265,21 @@ execution_result:
   scenario: user_cannot_modify_other_users_task
 
   steps:
-    - step: 1
+    - step: 1       # alice creates task — 201 Created, looks fine
       status: 201
 
-    - step: 2
-      status: 200   # suspicious
+    - step: 2       # bob's patch went through — this is wrong
+      status: 200
 
-    - step: 3
+    - step: 3       # alice sees bob's changes — the task was corrupted
       status: 200
       body:
         completed: true
+        last_modified_by: bob
 
   assertions:
     - name: unauthorized_patch_blocked
-      result: fail
+      result: fail   # bob should never have gotten a 200
 ```
 
 ### Adversary Finding (Example)
@@ -295,12 +291,14 @@ finding:
   confidence: 0.94
 
   rationale: >
-    userB successfully modified userA's resource.
-    violation reproduced deterministically.
+    Bob patched Alice's task and got a 200. Alice's subsequent GET confirms
+    the mutation stuck. No ownership check is being enforced on PATCH.
+    Reproduced deterministically across all four iterations.
 
   next_targets:
-    - ownership mutation
-    - list endpoint visibility
+    - ownership check on DELETE (probably also missing)
+    - task list endpoint — can bob see alice's tasks too?
+    - partial update invariants under concurrent writes
 ```
 
 ### Final Output
@@ -311,9 +309,9 @@ risk_report:
   risk_level: critical
 
   summary:
-    - cross-user write vulnerability
-    - destructive patch semantics
-    - invariant violations under partial updates
+    - any authenticated user can overwrite any other user's task
+    - PATCH applies writes without checking resource ownership
+    - invariants broken under partial update — completed flips silently
 
   coverage:
     endpoints_tested:
@@ -322,8 +320,9 @@ risk_report:
       - GET /tasks/{id}
 
   conclusion: >
-    system fails under moderate adversarial pressure.
-    not safe for production deployment.
+    System fails under moderate adversarial pressure.
+    Ownership enforcement is absent on mutating endpoints.
+    Do not promote to production.
 ```
 
 ## Prior Art
