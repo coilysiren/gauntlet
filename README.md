@@ -4,27 +4,65 @@ Flux Gate is a two-agent adversarial loop that infers software correctness by ob
 
 ## Quick start
 
+Set your LLM credentials, then point Flux Gate at a running API:
+
 ```bash
+export FLUX_GATE_OPERATOR_TYPE=openai
+export FLUX_GATE_OPERATOR_KEY=sk-...
+export FLUX_GATE_ADVERSARY_TYPE=anthropic
+export FLUX_GATE_ADVERSARY_KEY=sk-ant-...
+
 git clone git@github.com:coilysiren/flux-gate.git
 cd flux-gate
 docker compose run --rm demo
 ```
 
-That starts the demo API and runs `flux-gate` against it.
+That starts the demo API and runs the full adversarial loop against it.
 
 ## Installation
-
-To use Flux Gate against your own API:
 
 ```bash
 pip install flux-gate
 # or: uv add flux-gate
 ```
 
-Then point it at your locally-running service:
+## Usage
+
+### LLM configuration
+
+Flux Gate requires one LLM for the Operator role and one for the Adversary role. Configure
+each with a pair of environment variables:
+
+| Variable | Description |
+|---|---|
+| `FLUX_GATE_OPERATOR_TYPE` | LLM provider for the Operator: `openai` or `anthropic` |
+| `FLUX_GATE_OPERATOR_KEY` | API key for the Operator's provider |
+| `FLUX_GATE_ADVERSARY_TYPE` | LLM provider for the Adversary: `openai` or `anthropic` |
+| `FLUX_GATE_ADVERSARY_KEY` | API key for the Adversary's provider |
+
+The default models are `gpt-4o` for OpenAI and `claude-opus-4-5` for Anthropic.
+Using different providers for each role is intentional — model diversity reduces blind spots.
+
+### CLI
+
+```
+flux-gate <url> [--name NAME] [--env ENV] [--spec FILE] [--actors FILE] [--threshold N] [--fail-fast-tier N]
+```
+
+| Argument | Default | Description |
+|---|---|---|
+| `url` | required | Base URL of the running API |
+| `--name` | URL hostname | Label for the system under test in the report |
+| `--env` | `local` | Environment label (e.g. `staging`, `ci`) |
+| `--spec` | — | Path to a [FeatureSpec YAML](#feature-spec) file; enables holdout evaluation and merge gate |
+| `--actors` | — | Path to an [actors YAML](#actor-authentication) file for per-actor credentials |
+| `--threshold` | `0.90` | Holdout satisfaction score required to recommend merge |
+| `--fail-fast-tier` | disabled | Stop after the first tier ≥ N that finds a critical issue |
 
 ```bash
 flux-gate http://localhost:8000
+flux-gate http://localhost:8000 --name "Task API" --env staging --spec specs/task-ownership.yaml
+flux-gate http://localhost:8000 --spec specs/task-ownership.yaml --actors config/actors.yaml
 ```
 
 Output is YAML:
@@ -46,94 +84,53 @@ risk_report:
     without remediation.
 ```
 
-## Usage
+### Feature spec
 
-### CLI
+A FeatureSpec tells Flux Gate what you're testing and defines the holdout acceptance criteria.
+Acceptance criteria are never shown to the Operator — only to the holdout evaluator — preserving
+the train/test separation.
 
-```
-flux-gate <url> [--name NAME] [--env ENV]
-```
-
-| Argument | Default | Description |
-|---|---|---|
-| `url` | required | Base URL of the running API |
-| `--name` | URL hostname | Label for the system under test in the report |
-| `--env` | `local` | Environment label (e.g. `staging`, `ci`) |
-
-```bash
-flux-gate http://localhost:8000
-flux-gate http://localhost:8000 --name "Task API" --env staging
+```yaml
+# specs/task-ownership.yaml
+title: Users cannot modify each other's tasks
+description: >
+  The task API must enforce resource ownership. A user who did not create
+  a task must not be able to modify or delete it.
+acceptance_criteria:
+  - A PATCH request by a non-owner is rejected with 403
+  - The task body is unchanged after an unauthorized PATCH attempt
+  - A GET by the owner after an unauthorized PATCH returns the original data
+target_endpoints:
+  - POST /tasks
+  - PATCH /tasks/{id}
+  - GET /tasks/{id}
 ```
 
 ### Actor authentication
 
-Flux Gate runs scenarios as named actors (e.g. `userA`, `userB`). By default it
-passes the actor name in an `X-Actor` header. To use real credentials, pass
-`actor_headers` when constructing `HttpExecutor` directly:
+Create an actors YAML file to provide per-actor credentials. Actors omitted from the file
+fall back to the default `X-Actor: <name>` header.
 
-```python
-from flux_gate import DeterministicLocalExecutor, HttpExecutor, FluxGateRunner
-from flux_gate.roles import DemoAdversary, DemoOperator
-
-runner = FluxGateRunner(
-    executor=DeterministicLocalExecutor(
-        HttpExecutor(
-            "http://localhost:8000",
-            actor_headers={
-                "userA": {"Authorization": "Bearer token-a"},
-                "userB": {"Authorization": "Bearer token-b"},
-            },
-        )
-    ),
-    operator=DemoOperator(),
-    adversary=DemoAdversary(),
-)
-run = runner.run()
+```yaml
+# config/actors.yaml
+actors:
+  alice:
+    type: bearer
+    token: "eyJhbGciOiJIUzI1NiJ9..."
+  bob:
+    type: api_key
+    header: X-API-Key
+    key: "sk-bob-secret"
 ```
 
-### Custom Operator and Adversary
+Supported authentication types:
 
-Implement either protocol to plug in an LLM-backed agent:
+| Type | Fields | Header sent |
+|---|---|---|
+| `bearer` | `token` | `Authorization: Bearer <token>` |
+| `api_key` | `header`, `key` | `<header>: <key>` |
 
-```python
-from flux_gate import (
-    ExecutionResult,
-    Finding,
-    FluxGateRunner,
-    IterationRecord,
-    IterationSpec,
-    Scenario,
-)
-
-class LLMOperator:
-    def generate_scenarios(
-        self, spec: IterationSpec, previous_iterations: list[IterationRecord]
-    ) -> list[Scenario]:
-        # call your LLM, parse response into Scenario objects
-        ...
-
-class LLMAdversary:
-    def analyze(
-        self, spec: IterationSpec, execution_results: list[ExecutionResult]
-    ) -> list[Finding]:
-        # call your LLM, parse response into Finding objects
-        ...
-```
-
-### Reading the report
-
-```python
-run = runner.run()
-
-print(run.risk_report.risk_level)         # "low" | "medium" | "high" | "critical"
-print(run.risk_report.confidence_score)   # float 0.0–1.0
-print(run.risk_report.confirmed_failures) # list of issue identifiers
-print(run.risk_report.coverage)           # ["GET /tasks/1", "PATCH /tasks/1", ...]
-
-for iteration in run.iterations:
-    for finding in iteration.findings:
-        print(finding.severity, finding.issue, finding.rationale)
-```
+---
 
 ## Core Model
 
@@ -145,20 +142,20 @@ Flux Gate treats code change correctness as a problem of behavioral observation 
 
 It asks: "How hard did we try to break this, and what happened when we did?"
 
-## The Two Roles (Personified)
+## The Two Roles
 
-### The Operator (ChatGPT)
+### The Operator
 
-Explores the execution sphere
+Explores the execution space
 
 * Constructs plausible, production-like scenarios
 * Simulates how the system will actually be used (and misused)
 * Explores workflows, edge cases, and state transitions
 * Adapts based on what has already been tested
 
-The Operator is not trying to prove correctness, It is trying to create situations where correctness might fail.
+The Operator is not trying to prove correctness. It is trying to create situations where correctness might fail.
 
-### The Adversary (Claude)
+### The Adversary
 
 Applies intelligent pressure
 
@@ -167,7 +164,7 @@ Applies intelligent pressure
 * Forms hypotheses about hidden failure modes
 * Forces the next round of scenarios toward likely breakpoints
 
-The Adversary assumes "This system is broken. I just haven’t proven it yet."
+The Adversary assumes "This system is broken. I just haven't proven it yet."
 
 ### Dynamic Between Them
 
@@ -175,7 +172,7 @@ The Adversary assumes "This system is broken. I just haven’t proven it yet."
 * The Adversary sharpens
 * Execution grounds both
 
-Together, they perform a form of guided adversarial search over the space of possible failures
+Together, they perform a form of guided adversarial search over the space of possible failures.
 
 ## Concrete Flow (v0, fixed 4 iterations)
 
@@ -184,10 +181,6 @@ flux_gate_run:
   system_under_test: REST API
   environment: deterministic_local
 
-  roles:
-    operator: ChatGPT
-    Adversary: Claude
-
   loop:
     iterations: 4
 
@@ -195,32 +188,25 @@ flux_gate_run:
       goal: broad_baseline
       operator: generate diverse CRUD + lifecycle scenarios
       execute: run scenarios
-      Adversary: identify anomalies and weak coverage
+      adversary: identify anomalies and weak coverage
 
     iteration_2:
       goal: boundary_and_invariants
       operator: target edge cases, missing fields, schema drift
       execute: run refined scenarios
-      Adversary: escalate invariant violations
+      adversary: escalate invariant violations
 
     iteration_3:
       goal: adversarial_misuse
       operator: simulate auth violations, invalid transitions, cross-user access
       execute: run attack scenarios
-      Adversary: identify security and logic failures
+      adversary: identify security and logic failures
 
     iteration_4:
       goal: targeted_followup
       operator: focus only on suspicious areas
       execute: confirm and expand blast radius
-      Adversary: finalize failure model
-
-  output:
-    confidence_score: probabilistic
-    risk_profile:
-      - confirmed_failures
-      - suspicious_patterns
-      - unexplored_surfaces
+      adversary: finalize failure model
 ```
 
 ### Scenario Shape (Example)
@@ -343,7 +329,7 @@ Flux Gate is not:
 * a code reviewer
 * a fuzzing tool
 
-It is an adversarial inference engine for software correctness
+It is an adversarial inference engine for software correctness.
 
 It combines:
 

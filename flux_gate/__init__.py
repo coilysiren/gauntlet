@@ -1,4 +1,6 @@
+from .auth import ActorsConfig, ApiKeyAuth, BearerAuth, to_actor_headers
 from .executor import DeterministicLocalExecutor, HttpExecutor, InMemoryTaskAPI
+from .llm import LLMAdversary, LLMOperator, create_adversary, create_operator
 from .loop import FluxGateRunner, build_default_iteration_specs
 from .models import (
     Assertion,
@@ -29,8 +31,11 @@ from .roles import (
 )
 
 __all__ = [
+    "ActorsConfig",
+    "ApiKeyAuth",
     "Assertion",
     "AssertionResult",
+    "BearerAuth",
     "DemoAdversary",
     "DemoHoldoutEvaluator",
     "DemoNaturalLanguageEvaluator",
@@ -50,6 +55,8 @@ __all__ = [
     "InMemoryTaskAPI",
     "IterationRecord",
     "IterationSpec",
+    "LLMAdversary",
+    "LLMOperator",
     "MergeGate",
     "NaturalLanguageScenario",
     "RiskReport",
@@ -57,4 +64,7 @@ __all__ = [
     "ScenarioStep",
     "SpecAssessment",
     "build_default_iteration_specs",
+    "create_adversary",
+    "create_operator",
+    "to_actor_headers",
 ]

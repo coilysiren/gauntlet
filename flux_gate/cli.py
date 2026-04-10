@@ -1,22 +1,26 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
 import yaml
 
+from .auth import ActorsConfig, to_actor_headers
 from .executor import DeterministicLocalExecutor, HttpExecutor
+from .llm import create_adversary, create_operator
 from .loop import FluxGateRunner
 from .models import FeatureSpec
 from .roles import (
-    DemoAdversary,
-    DemoNaturalLanguageEvaluator,
-    DemoNaturalLanguageHoldoutEvaluator,
-    DemoOperator,
     DemoSpecAssessor,
 )
+
+_ENV_OPERATOR_TYPE = "FLUX_GATE_OPERATOR_TYPE"
+_ENV_OPERATOR_KEY = "FLUX_GATE_OPERATOR_KEY"
+_ENV_ADVERSARY_TYPE = "FLUX_GATE_ADVERSARY_TYPE"
+_ENV_ADVERSARY_KEY = "FLUX_GATE_ADVERSARY_KEY"
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -24,7 +28,7 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="flux-gate",
         description=(
             "Adversarial inference engine for software correctness. "
-            "Runs a two-agent loop against a locally-running HTTP API and "
+            "Runs a two-agent LLM loop against a locally-running HTTP API and "
             "outputs a risk report."
         ),
     )
@@ -47,6 +51,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="FILE",
         help="Path to a FeatureSpec YAML file; enables holdout evaluation and merge gate",
+    )
+    parser.add_argument(
+        "--actors",
+        default=None,
+        metavar="FILE",
+        help="Path to an actors YAML file defining per-actor authentication credentials",
     )
     parser.add_argument(
         "--threshold",
@@ -72,6 +82,35 @@ def main() -> None:
     parser = _build_parser()
     args = parser.parse_args()
 
+    # LLM operator configuration — required env vars.
+    operator_type = os.environ.get(_ENV_OPERATOR_TYPE, "")
+    operator_key = os.environ.get(_ENV_OPERATOR_KEY, "")
+    adversary_type = os.environ.get(_ENV_ADVERSARY_TYPE, "")
+    adversary_key = os.environ.get(_ENV_ADVERSARY_KEY, "")
+
+    missing = [
+        name
+        for name, val in [
+            (_ENV_OPERATOR_TYPE, operator_type),
+            (_ENV_OPERATOR_KEY, operator_key),
+            (_ENV_ADVERSARY_TYPE, adversary_type),
+            (_ENV_ADVERSARY_KEY, adversary_key),
+        ]
+        if not val
+    ]
+    if missing:
+        print(
+            f"error: missing required environment variables: {', '.join(missing)}\n"
+            f"\n"
+            f"Set them before running flux-gate:\n"
+            f"  export {_ENV_OPERATOR_TYPE}=openai       # or: anthropic\n"
+            f"  export {_ENV_OPERATOR_KEY}=sk-...\n"
+            f"  export {_ENV_ADVERSARY_TYPE}=anthropic   # or: openai\n"
+            f"  export {_ENV_ADVERSARY_KEY}=sk-ant-...",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     name: str = args.name or urlparse(args.url).netloc or args.url
 
     feature_spec: FeatureSpec | None = None
@@ -79,13 +118,16 @@ def main() -> None:
         raw = yaml.safe_load(Path(args.spec).read_text())
         feature_spec = FeatureSpec(**raw)
 
-    executor = DeterministicLocalExecutor(HttpExecutor(args.url))
+    actor_headers: dict[str, dict[str, str]] = {}
+    if args.actors:
+        actors_raw = yaml.safe_load(Path(args.actors).read_text())
+        actor_headers = to_actor_headers(ActorsConfig(**actors_raw))
+
+    executor = DeterministicLocalExecutor(HttpExecutor(args.url, actor_headers=actor_headers))
     runner = FluxGateRunner(
         executor=executor,
-        operator=DemoOperator(),
-        adversary=DemoAdversary(),
-        nl_holdout_evaluator=DemoNaturalLanguageHoldoutEvaluator() if feature_spec else None,
-        nl_evaluator=DemoNaturalLanguageEvaluator() if feature_spec else None,
+        operator=create_operator(operator_type, operator_key),
+        adversary=create_adversary(adversary_type, adversary_key),
         spec_assessor=DemoSpecAssessor() if feature_spec else None,
         feature_spec=feature_spec,
         gate_threshold=args.threshold,

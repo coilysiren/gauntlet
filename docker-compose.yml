@@ -14,6 +14,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    environment:
+      - FLUX_GATE_OPERATOR_TYPE
+      - FLUX_GATE_OPERATOR_KEY
+      - FLUX_GATE_ADVERSARY_TYPE
+      - FLUX_GATE_ADVERSARY_KEY
 
   test:
     build: .
