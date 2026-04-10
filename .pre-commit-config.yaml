@@ -13,3 +13,5 @@ repos:
         additional_dependencies:
           - pydantic>=2.12.5
           - pytest>=9.0.3
+          - pyyaml>=6.0.3
+          - types-PyYAML>=6.0.12

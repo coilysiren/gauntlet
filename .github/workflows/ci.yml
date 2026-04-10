@@ -45,12 +45,6 @@ jobs:
       - name: pytest
         run: uv run pytest -m "not docker"
 
-      - name: Upload coverage
-        uses: codecov/codecov-action@v5
-        with:
-          files: coverage.xml
-        if: always()
-
   docker:
     name: Docker
     runs-on: ubuntu-latest
