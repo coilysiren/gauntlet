@@ -2,6 +2,119 @@
 
 Flux Gate is a two-agent adversarial loop that infers software correctness by observing how code behaves under sustained, targeted attack, and is designed as quality control for a dark factory environment.
 
+## Installation
+
+```bash
+pip install flux-gate
+```
+
+Or with [uv](https://docs.astral.sh/uv/):
+
+```bash
+uv add flux-gate
+```
+
+## Quick start
+
+```python
+import yaml
+from flux_gate import (
+    DemoAdversary,
+    DemoOperator,
+    DeterministicLocalExecutor,
+    FluxGateRunner,
+    InMemoryTaskAPI,
+)
+
+runner = FluxGateRunner(
+    executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
+    operator=DemoOperator(),
+    adversary=DemoAdversary(),
+)
+
+run = runner.run()
+print(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
+```
+
+## Usage
+
+### Bring your own system under test
+
+Replace `InMemoryTaskAPI` with any object that implements `send(actor, request) -> HttpResponse`:
+
+```python
+import requests as http
+from flux_gate import FluxGateRunner, DeterministicLocalExecutor, HttpRequest, HttpResponse
+
+class LiveAPI:
+    def __init__(self, base_url: str) -> None:
+        self._base_url = base_url
+
+    def send(self, actor: str, request: HttpRequest) -> HttpResponse:
+        resp = http.request(
+            request.method,
+            f"{self._base_url}{request.path}",
+            json=request.body or None,
+            headers={"X-Actor": actor},
+        )
+        return HttpResponse(status_code=resp.status_code, body=resp.json())
+```
+
+### Bring your own Operator and Adversary
+
+Implement either protocol to plug in an LLM-backed agent:
+
+```python
+from flux_gate import (
+    ExecutionResult,
+    Finding,
+    FluxGateRunner,
+    IterationRecord,
+    IterationSpec,
+    Scenario,
+)
+
+class LLMOperator:
+    def generate_scenarios(
+        self, spec: IterationSpec, previous_iterations: list[IterationRecord]
+    ) -> list[Scenario]:
+        # call your LLM, parse response into Scenario objects
+        ...
+
+class LLMAdversary:
+    def analyze(
+        self, spec: IterationSpec, execution_results: list[ExecutionResult]
+    ) -> list[Finding]:
+        # call your LLM, parse response into Finding objects
+        ...
+
+runner = FluxGateRunner(
+    executor=DeterministicLocalExecutor(LiveAPI("https://api.example.com")),
+    operator=LLMOperator(),
+    adversary=LLMAdversary(),
+)
+run = runner.run()
+```
+
+### Inspect the results
+
+```python
+run = runner.run()
+
+# top-level risk verdict
+print(run.risk_report.risk_level)        # "low" | "medium" | "high" | "critical"
+print(run.risk_report.confidence_score)  # float 0.0–1.0
+print(run.risk_report.confirmed_failures)
+
+# per-iteration findings
+for iteration in run.iterations:
+    for finding in iteration.findings:
+        print(finding.severity, finding.issue, finding.rationale)
+
+# coverage
+print(run.risk_report.coverage)          # ["GET /tasks/1", "PATCH /tasks/1", ...]
+```
+
 ## Core Model
 
 Flux Gate treats code change correctness as a problem of behavioral observation while under attack.
