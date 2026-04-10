@@ -2,6 +2,8 @@
 
 Flux Gate is a two-agent adversarial loop that infers software correctness by observing how code behaves under sustained, targeted attack. It's designed as quality control for a dark factory environment — where code is written by bots and verified by attack.
 
+The name comes from the flux gate magnetometer: a sensor that detects weak fields by actively saturating a ferromagnetic core, revealing distortions that passive measurement would miss. Here, the Adversary saturates the system under test across escalating tiers of pressure until hidden failure modes become detectable — then gates promotion on whether any signal came through.
+
 ## Quick start
 
 Set your LLM credentials, then point Flux Gate at a running API:
