@@ -10,4 +10,4 @@ RUN uv sync --frozen --no-install-project
 COPY . .
 RUN uv sync --frozen
 
-CMD ["uv", "run", "python", "main.py"]
+CMD ["uv", "run", "python", "demo_api/server.py"]

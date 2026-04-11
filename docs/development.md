@@ -50,7 +50,7 @@ Pre-commit hooks run automatically on every `git commit`. To run manually:
 uv run ruff check .          # lint
 uv run ruff check . --fix    # lint + auto-fix
 uv run ruff format .         # format
-uv run mypy flux_gate tests main.py demo_api --strict  # type-check
+uv run mypy flux_gate tests demo_api --strict  # type-check
 ```
 
 ## CI
