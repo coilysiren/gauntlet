@@ -1,11 +1,5 @@
 # TODO
 
-Add a replay bundle concept for findings. Store a minimal sequence of actions and inputs that can reproduce the issue. Full determinism is not required yet, but reproducibility should be possible.
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above
-
 Introduce an Adapter abstraction for execution surfaces. HTTP becomes one adapter, with CLI and WebDriver as next candidates. This decouples the adversarial loop from any single interface.
 
 ---

@@ -15,6 +15,8 @@ from .models import (
     NaturalLanguagePlan,
     Plan,
     PlanStep,
+    ReplayBundle,
+    ReplayStep,
     Target,
     Weapon,
     WeaponAssessment,
@@ -164,6 +166,9 @@ class DemoInspector:
                 for s in result.steps
             ]
             violated_blocker = failed_assertions[0].name if failed_assertions else None
+            replay_bundle = ReplayBundle(
+                steps=[ReplayStep(user=s.user, request=s.request) for s in result.steps]
+            )
             findings.append(
                 Finding(
                     issue="unauthorized_cross_user_modification",
@@ -182,6 +187,7 @@ class DemoInspector:
                     reproduction_steps=reproduction_steps,
                     traces=result.steps,
                     violated_blocker=violated_blocker,
+                    replay_bundle=replay_bundle,
                 )
             )
         return findings

@@ -95,6 +95,24 @@ class EvidenceItem(GauntletModel):
     content: str
 
 
+class ReplayStep(GauntletModel):
+    """A single action in a replay bundle: who performed it and what they sent."""
+
+    user: str
+    request: HttpRequest
+
+
+class ReplayBundle(GauntletModel):
+    """Minimal sequence of actions sufficient to reproduce a finding.
+
+    Full determinism is not guaranteed — dynamic IDs and state-dependent paths
+    may vary across runs — but the bundle captures enough context to attempt
+    reproduction against a fresh instance of the system under test.
+    """
+
+    steps: list[ReplayStep]
+
+
 class Finding(GauntletModel):
     issue: str
     severity: Literal["low", "medium", "high", "critical"]
@@ -105,6 +123,7 @@ class Finding(GauntletModel):
     reproduction_steps: list[str] = Field(default_factory=list)
     traces: list[ExecutionStepResult] = Field(default_factory=list)
     violated_blocker: str | None = None
+    replay_bundle: ReplayBundle | None = None
 
 
 class WeaponBrief(GauntletModel):
