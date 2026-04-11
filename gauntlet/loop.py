@@ -77,7 +77,7 @@ class GauntletRunner:
         gate_threshold: float = 0.90,
         fail_fast_tier: int | None = None,
     ) -> None:
-        self._executor = executor
+        self._drone = executor
         self._attacker = attacker
         self._inspector = inspector
         self._holdout_vitals = holdout_vitals
@@ -110,7 +110,7 @@ class GauntletRunner:
         records: list[IterationRecord] = []
         for spec in specs:
             plans = self._attacker.generate_plans(spec, records)
-            execution_results = [self._executor.run_plan(plan) for plan in plans]
+            execution_results = [self._drone.run_plan(plan) for plan in plans]
             findings = self._inspector.analyze(spec, execution_results)
             records.append(
                 IterationRecord(
@@ -133,12 +133,12 @@ class GauntletRunner:
         if self._weapon is not None:
             if self._holdout_vitals is not None:
                 for plan in self._holdout_vitals.acceptance_plans(self._weapon):
-                    holdout_results.append(self._executor.run_plan(plan))
+                    holdout_results.append(self._drone.run_plan(plan))
 
             if self._nl_holdout_vitals is not None and self._nl_vitals is not None:
-                nl_scenarios = self._nl_holdout_vitals.acceptance_plans(self._weapon)
-                for nl_scenario in nl_scenarios:
-                    holdout_results.append(self._nl_vitals.evaluate(nl_scenario, self._executor))
+                nl_plans = self._nl_holdout_vitals.acceptance_plans(self._weapon)
+                for nl_plan in nl_plans:
+                    holdout_results.append(self._nl_vitals.evaluate(nl_plan, self._drone))
 
         return GauntletRun(
             weapon=self._weapon,

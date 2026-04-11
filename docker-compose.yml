@@ -10,7 +10,7 @@ services:
 
   demo:
     build: .
-    command: uv run flux-gate http://api:8000 --name "Demo Task API"
+    command: uv run gauntlet http://api:8000 --name "Demo Task API"
     depends_on:
       api:
         condition: service_healthy

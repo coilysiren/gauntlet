@@ -1,14 +1,14 @@
-# ⚡🔄🛂 Flux Gate
+# ⚡🔄🛂 Gauntlet
 
-Flux Gate is a two-agent adversarial loop that infers software correctness by observing how code behaves under sustained, targeted attack. It's designed as quality control for a dark factory environment — where code is written by bots and verified by attack.
+Gauntlet is a two-agent adversarial loop that infers software correctness by observing how code behaves under sustained, targeted attack. It's designed as quality control for a dark factory environment — where code is written by bots and verified by attack.
 
-The name comes from the flux gate magnetometer: a sensor that detects weak fields by actively saturating a ferromagnetic core, revealing distortions that passive measurement would miss. Here, the Adversary saturates the system under test across escalating tiers of pressure until hidden failure modes become detectable — then gates promotion on whether any signal came through.
+The name comes from "running the gauntlet": a challenge where you must survive a sustained barrage from all sides. Here, the Inspector drives the system under test through escalating tiers of adversarial pressure until hidden failure modes become detectable — then gates promotion on whether any signal came through.
 
-AI-written code can look correct — following conventions, passing linting, reading plausibly — while hiding behavioral failures that only surface under real use. Traditional tests don't catch this because the same agent that wrote the code also wrote the tests, sharing the same blind spots. Flux Gate is built for this: the Adversary assumes the code is broken and generates scenarios the code author never considered, and the `must_hold` properties in each Weapon are never shown to the Operator, preserving a real train/test split that prevents the agent from inadvertently writing code that passes by knowing what the tests check.
+AI-written code can look correct — following conventions, passing linting, reading plausibly — while hiding behavioral failures that only surface under real use. Traditional tests don't catch this because the same agent that wrote the code also wrote the tests, sharing the same blind spots. Gauntlet is built for this: the Inspector assumes the code is broken and generates plans the code author never considered, and the `must_hold` properties in each Weapon are never shown to the Attacker, preserving a real train/test split that prevents the agent from inadvertently writing code that passes by knowing what the tests check.
 
 ## Quick start
 
-Set your LLM credentials, then point Flux Gate at a running API:
+Set your LLM credentials, then point Gauntlet at a running API:
 
 ```bash
 export FLUX_GATE_OPERATOR_TYPE=openai
@@ -16,8 +16,8 @@ export FLUX_GATE_OPERATOR_KEY=sk-...
 export FLUX_GATE_ADVERSARY_TYPE=anthropic
 export FLUX_GATE_ADVERSARY_KEY=sk-ant-...
 
-git clone git@github.com:coilysiren/flux-gate.git
-cd flux-gate
+git clone git@github.com:coilysiren/gauntlet.git
+cd gauntlet
 docker compose run --rm demo
 ```
 
@@ -26,8 +26,8 @@ That starts the demo API and runs the full adversarial loop against it.
 ## Installation
 
 ```bash
-pip install flux-gate
-# or: uv add flux-gate
+pip install gauntlet
+# or: uv add gauntlet
 ```
 
 ## Usage
@@ -36,15 +36,15 @@ For workflow guidance (when to run, how to integrate, how to act on results), se
 
 ### LLM configuration
 
-Flux Gate requires one LLM for the Operator role and one for the Adversary role. Configure
+Gauntlet requires one LLM for the Attacker role and one for the Inspector role. Configure
 each with a pair of environment variables:
 
 | Variable | Description |
 |---|---|
-| `FLUX_GATE_OPERATOR_TYPE` | LLM provider for the Operator: `openai` or `anthropic` |
-| `FLUX_GATE_OPERATOR_KEY` | API key for the Operator's provider |
-| `FLUX_GATE_ADVERSARY_TYPE` | LLM provider for the Adversary: `openai` or `anthropic` |
-| `FLUX_GATE_ADVERSARY_KEY` | API key for the Adversary's provider |
+| `FLUX_GATE_OPERATOR_TYPE` | LLM provider for the Attacker: `openai` or `anthropic` |
+| `FLUX_GATE_OPERATOR_KEY` | API key for the Attacker's provider |
+| `FLUX_GATE_ADVERSARY_TYPE` | LLM provider for the Inspector: `openai` or `anthropic` |
+| `FLUX_GATE_ADVERSARY_KEY` | API key for the Inspector's provider |
 
 The default models are `gpt-4o` for OpenAI and `claude-opus-4-5` for Anthropic.
 Using different providers for each role is intentional — model diversity reduces blind spots.
@@ -52,23 +52,23 @@ Using different providers for each role is intentional — model diversity reduc
 ### CLI
 
 ```
-flux-gate <url> [--weapon FILE_OR_DIR] [--target FILE_OR_DIR] [--actors FILE] [--threshold N] [--no-fail-fast]
+gauntlet <url> [--weapon FILE_OR_DIR] [--target FILE_OR_DIR] [--users FILE] [--threshold N] [--no-fail-fast]
 ```
 
 | Argument | Default | Description |
 |---|---|---|
 | `url` | required | Base URL of the running API |
-| `--weapon` | `.flux_gate/weapons` | Path to a [Weapon YAML](#weapons) file, or a directory of YAML files (one weapon per file) |
-| `--target` | `.flux_gate/targets` | Path to a [Target YAML](#targets) file, or a directory of YAML files (one target per file) |
-| `--actors` | `.flux_gate/actors.yaml` | Path to an [actors YAML](#actor-authentication) file |
+| `--weapon` | `.gauntlet/weapons` | Path to a [Weapon YAML](#weapons) file, or a directory of YAML files (one weapon per file) |
+| `--target` | `.gauntlet/targets` | Path to a [Target YAML](#targets) file, or a directory of YAML files (one target per file) |
+| `--users` | `.gauntlet/users.yaml` | Path to an [users YAML](#user-authentication) file |
 | `--threshold` | `0.90` | Holdout satisfaction score required to recommend merge |
 | `--fail-fast` / `--no-fail-fast` | enabled | Stop at the first critical finding; use `--no-fail-fast` to run all iterations |
 
 ```bash
-flux-gate http://localhost:8000
-flux-gate http://localhost:8000 --no-fail-fast
-flux-gate http://localhost:8000 --weapon /path/to/weapons/ --target /path/to/targets/ --actors /path/to/actors.yaml
-flux-gate http://localhost:8000 --weapon /path/to/single_weapon.yaml --target /path/to/single_target.yaml
+gauntlet http://localhost:8000
+gauntlet http://localhost:8000 --no-fail-fast
+gauntlet http://localhost:8000 --weapon /path/to/weapons/ --target /path/to/targets/ --users /path/to/users.yaml
+gauntlet http://localhost:8000 --weapon /path/to/single_weapon.yaml --target /path/to/single_target.yaml
 ```
 
 Output is YAML:
@@ -90,30 +90,30 @@ risk_report:
 
 ### Project config directory
 
-Place your Flux Gate config files in a `.flux_gate/` directory at the root of your project.
+Place your Gauntlet config files in a `.gauntlet/` directory at the root of your project.
 The CLI discovers them automatically — no flags needed for the common case:
 
 ```
 your-project/
-├── .flux_gate/
+├── .gauntlet/
 │   ├── weapons/            # one YAML file per Weapon — all loaded automatically
 │   │   ├── task_ownership.yaml
 │   │   └── task_read_isolation.yaml
 │   ├── targets/            # one YAML file per Target — all loaded automatically
 │   │   └── task_endpoints.yaml
-│   └── actors.yaml         # Actor auth — loaded automatically if present
+│   └── users.yaml         # User auth — loaded automatically if present
 └── ...
 ```
 
-Override any path with `--weapon FILE_OR_DIR`, `--target FILE_OR_DIR`, or `--actors FILE`.
+Override any path with `--weapon FILE_OR_DIR`, `--target FILE_OR_DIR`, or `--users FILE`.
 
 ### Weapons
 
-A Weapon defines a reusable attack strategy. The `blockers` are never shown to the Operator —
+A Weapon defines a reusable attack strategy. The `blockers` are never shown to the Attacker —
 only to the holdout evaluator — preserving the train/test separation.
 
 ```yaml
-# .flux_gate/weapons/task_ownership.yaml
+# .gauntlet/weapons/task_ownership.yaml
 title: Users cannot modify each other's tasks
 description: >
   The task API must enforce resource ownership. A user who did not create
@@ -130,7 +130,7 @@ A Target defines the API surface a Weapon is tested against. One target per YAML
 Point multiple targets at the same weapon to test the same attack across different API surfaces.
 
 ```yaml
-# .flux_gate/targets/task_endpoints.yaml
+# .gauntlet/targets/task_endpoints.yaml
 title: Task ownership endpoints
 endpoints:
   - POST /tasks
@@ -138,15 +138,15 @@ endpoints:
   - GET /tasks/{id}
 ```
 
-### Actor authentication
+### User authentication
 
-Create `.flux_gate/actors.yaml` to provide per-actor credentials. Secret values are
+Create `.gauntlet/users.yaml` to provide per-user credentials. Secret values are
 never stored in the file — each entry names an environment variable that holds the
-actual credential. Actors omitted from the file fall back to the default `X-Actor: <name>` header.
+actual credential. Users omitted from the file fall back to the default `X-User: <name>` header.
 
 ```yaml
-# .flux_gate/actors.yaml
-actors:
+# .gauntlet/users.yaml
+users:
   alice:
     type: bearer
     token_env: ALICE_TOKEN       # export ALICE_TOKEN=eyJ...
@@ -165,7 +165,7 @@ Supported authentication types:
 
 ## Core Model
 
-Flux Gate treats code change correctness as a problem of behavioral observation while under attack.
+Gauntlet treats code change correctness as a problem of behavioral observation while under attack.
 
 * Code is assumed to be untrusted, potentially written but a human - but designed to be written by a bot
 * Tests are generated dynamically
@@ -175,39 +175,39 @@ It asks: "How hard did we try to break this, and what happened when we did?"
 
 ## The Two Roles
 
-### The Operator
+### The Attacker
 
 Explores the execution space
 
-* Constructs plausible, production-like scenarios
+* Constructs plausible, production-like plans
 * Simulates how the system will actually be used (and misused)
 * Explores workflows, edge cases, and state transitions
 * Adapts based on what has already been tested
 
-The Operator is not trying to prove correctness. It is trying to create situations where correctness might fail.
+The Attacker is not trying to prove correctness. It is trying to create situations where correctness might fail.
 
-### The Adversary
+### The Inspector
 
 Applies intelligent pressure
 
 * Analyzes execution results for weaknesses
 * Identifies suspicious passes and untested assumptions
 * Forms hypotheses about hidden failure modes
-* Forces the next round of scenarios toward likely breakpoints
+* Forces the next round of plans toward likely breakpoints
 
-The Adversary assumes "This system is broken. I just haven't proven it yet."
+The Inspector assumes "This system is broken. I just haven't proven it yet."
 
 ### Dynamic Between Them
 
-* The Operator explores
-* The Adversary sharpens
+* The Attacker explores
+* The Inspector sharpens
 * Execution grounds both
 
 Together, they perform a form of guided adversarial search over the space of possible failures.
 
 ## What Makes This Different
 
-Flux Gate is not:
+Gauntlet is not:
 
 * a test runner
 * a code reviewer
@@ -217,34 +217,34 @@ It is an adversarial inference engine for software correctness.
 
 It combines:
 
-* dynamic scenario generation (like red teaming)
+* dynamic plan generation (like red teaming)
 * execution grounding (like CI)
 * adversarial refinement (like security testing)
 
 ## Prior Art
 
-These projects informed Flux Gate's design.
+These projects informed Gauntlet's design.
 
 ### [StrongDM Software Factory](https://factory.strongdm.ai/)
 
 Production dark factory — code is written and reviewed entirely by agents.
 
-Key architectural ideas adopted: **satisfaction metrics** (probabilistic 0–1 scores, not boolean pass/fail) and the principle that **scenarios live outside the codebase** to prevent reward-hacking (Flux Gate uses `.flux_gate/spec.yaml`).
+Key architectural ideas adopted: **satisfaction metrics** (probabilistic 0–1 scores, not boolean pass/fail) and the principle that **plans live outside the codebase** to prevent reward-hacking (Gauntlet uses `.gauntlet/spec.yaml`).
 
-Architectural divergence: the Software Factory maintains a Digital Twin Universe — behavioral clones of third-party services that agents test against without hitting real infrastructure. Flux Gate has no twin layer; it requires a running HTTP server and sends real requests. The Software Factory is also a full code-generation pipeline; Flux Gate is only a gate. It verifies code already written, it does not write code.
+Architectural divergence: the Software Factory maintains a Digital Twin Universe — behavioral clones of third-party services that agents test against without hitting real infrastructure. Gauntlet has no twin layer; it requires a running HTTP server and sends real requests. The Software Factory is also a full code-generation pipeline; Gauntlet is only a gate. It verifies code already written, it does not write code.
 
 ### [OctopusGarden](https://github.com/foundatron/octopusgarden)
 
 Open-source autonomous development platform with a convergence-based loop.
 
-Key architectural ideas adopted: **stratified scenario difficulty** (Flux Gate's four tiers: baseline → boundary → adversarial → targeted) and the **attractor loop** concept — iterating until a threshold is met (Flux Gate's `--threshold` flag).
+Key architectural ideas adopted: **stratified plan difficulty** (Gauntlet's four tiers: baseline → boundary → adversarial → targeted) and the **attractor loop** concept — iterating until a threshold is met (Gauntlet's `--threshold` flag).
 
-Architectural divergence: OctopusGarden's loop is dynamic — it runs until satisfaction converges, with stall recovery via high-temperature "wonder" phases and model escalation (cheap model first, premium model after non-improving iterations). Flux Gate's loop is fixed-depth: four tiers, one pass. There is no stall detection, no wonder phase, and no model escalation. The tradeoff is predictability and cost over adaptive thoroughness.
+Architectural divergence: OctopusGarden's loop is dynamic — it runs until satisfaction converges, with stall recovery via high-temperature "wonder" phases and model escalation (cheap model first, premium model after non-improving iterations). Gauntlet's loop is fixed-depth: four tiers, one pass. There is no stall detection, no wonder phase, and no model escalation. The tradeoff is predictability and cost over adaptive thoroughness.
 
 ### [Fabro](https://github.com/fabro-sh/fabro)
 
 Open-source dark factory orchestrator with a graph-based workflow engine.
 
-Key architectural ideas adopted: **human-in-the-loop gates** — Fabro's hexagon gates are checkpoints where a human can block promotion. Flux Gate's `MergeGate` plays the same role, but the decision is made by the Adversary LLM rather than a human.
+Key architectural ideas adopted: **human-in-the-loop gates** — Fabro's hexagon gates are checkpoints where a human can block promotion. Gauntlet's `Clearance` plays the same role, but the decision is made by the Inspector LLM rather than a human.
 
-Architectural divergence: Fabro models workflows as directed graphs (Graphviz DOT files, version-controlled alongside code). Flux Gate has no graph engine — its pipeline is a fixed linear sequence of iterations. Fabro also supports multi-model routing via CSS-like stylesheets and per-stage Git checkpointing. Flux Gate has neither: model assignment is static (one Operator, one Adversary) and there is no checkpointing between iterations.
+Architectural divergence: Fabro models workflows as directed graphs (Graphviz DOT files, version-controlled alongside code). Gauntlet has no graph engine — its pipeline is a fixed linear sequence of iterations. Fabro also supports multi-model routing via CSS-like stylesheets and per-stage Git checkpointing. Gauntlet has neither: model assignment is static (one Attacker, one Inspector) and there is no checkpointing between iterations.

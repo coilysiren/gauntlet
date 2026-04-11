@@ -151,7 +151,7 @@ class Drone:
 # then add a branch below keyed on assertion.kind.
 # To add a new rule: add a branch inside the assertion.kind == "rule" block
 # keyed on assertion.rule. The rule string is set by the Attacker when it builds
-# the Assertion. Add a test case in tests/test_flux_gate.py for either.
+# the Assertion. Add a test case in tests/test_gauntlet.py for either.
 def _evaluate_assertion(
     assertion: Assertion, step_results: list[ExecutionStepResult]
 ) -> AssertionResult:

@@ -1,6 +1,6 @@
 """Minimal HTTP server that exposes InMemoryTaskAPI over the wire.
 
-Intended only as a demo target for `flux-gate`.  Not for production use.
+Intended only as a demo target for `gauntlet`.  Not for production use.
 
 Usage::
 

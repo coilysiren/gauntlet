@@ -85,7 +85,7 @@ class WeaponAssessor(Protocol):
 
     Returns a ``WeaponAssessment`` with a quality score, issues, suggestions,
     and a ``proceed`` flag. When ``proceed`` is ``False``, the runner skips
-    all iterations and returns a blocked merge gate.
+    all iterations and returns a blocked clearance.
     """
 
     def assess(self, weapon: Weapon, target: Target | None) -> WeaponAssessment: ...

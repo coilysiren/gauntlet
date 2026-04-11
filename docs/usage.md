@@ -2,9 +2,9 @@
 
 Workflow guide for AI agents operating in CI pipelines or agentic dark factory loops. For CLI flags and environment variable reference, see the [README](../README.md).
 
-## When to run Flux Gate
+## When to run Gauntlet
 
-Run Flux Gate after your existing tests pass and before promoting or merging. It is not a test runner — it assumes the code and its tests share the same blind spots, because they were likely written by the same agent. Running it before promotion adds a second adversarial pass from a model that has no knowledge of how the code was written.
+Run Gauntlet after your existing tests pass and before promoting or merging. It is not a test runner — it assumes the code and its tests share the same blind spots, because they were likely written by the same agent. Running it before promotion adds a second adversarial pass from a model that has no knowledge of how the code was written.
 
 Place it as the final gate in your CI pipeline or agentic loop.
 
@@ -19,7 +19,7 @@ export FLUX_GATE_ADVERSARY_TYPE=anthropic
 export FLUX_GATE_ADVERSARY_KEY=sk-ant-...
 ```
 
-Using different providers for Operator and Adversary is intentional — model diversity reduces shared blind spots. Default models are `gpt-4o` (OpenAI) and `claude-opus-4-5` (Anthropic).
+Using different providers for Attacker and Inspector is intentional — model diversity reduces shared blind spots. Default models are `gpt-4o` (OpenAI) and `claude-opus-4-5` (Anthropic).
 
 In CI, set these as secrets. In an agentic loop, they are inherited from the environment.
 
@@ -27,10 +27,10 @@ See the [README](../README.md#llm-configuration) for the full reference table.
 
 ## Write weapons
 
-Weapons define attack strategies that are reusable across API surfaces. Each weapon is a YAML file in `.flux_gate/weapons/`.
+Weapons define attack strategies that are reusable across API surfaces. Each weapon is a YAML file in `.gauntlet/weapons/`.
 
 ```yaml
-# .flux_gate/weapons/task_ownership.yaml
+# .gauntlet/weapons/task_ownership.yaml
 title: Users cannot modify each other's tasks
 description: >
   The task API must enforce resource ownership. A user who did not create
@@ -41,7 +41,7 @@ blockers:
   - A GET by the owner after an unauthorized PATCH returns the original data
 ```
 
-**The train/test split:** `blockers` are never shown to the Operator — only to the holdout evaluator. This means the agent that wrote the code cannot inadvertently write code that passes by knowing what the checks are. Keep `blockers` statements specific and falsifiable.
+**The train/test split:** `blockers` are never shown to the Attacker — only to the holdout evaluator. This means the agent that wrote the code cannot inadvertently write code that passes by knowing what the checks are. Keep `blockers` statements specific and falsifiable.
 
 Tips:
 - One weapon per file — name the file after the property it protects (e.g. `task_ownership.yaml`)
@@ -49,10 +49,10 @@ Tips:
 
 ## Write targets
 
-Targets define the API surface a weapon is tested against. Each target is a YAML file in `.flux_gate/targets/`.
+Targets define the API surface a weapon is tested against. Each target is a YAML file in `.gauntlet/targets/`.
 
 ```yaml
-# .flux_gate/targets/task_endpoints.yaml
+# .gauntlet/targets/task_endpoints.yaml
 title: Task ownership endpoints
 endpoints:
   - POST /tasks
@@ -62,13 +62,13 @@ endpoints:
 
 One weapon can be paired with many targets — the runner executes one pass per weapon/target combination. If no targets are configured, each weapon runs without a specific target.
 
-### Actor authentication
+### User authentication
 
-If your API uses authentication, create `.flux_gate/actors.yaml` to provide per-actor credentials. Actors omitted from the file fall back to the default `X-Actor: <name>` header.
+If your API uses authentication, create `.gauntlet/users.yaml` to provide per-user credentials. Users omitted from the file fall back to the default `X-User: <name>` header.
 
 ```yaml
-# .flux_gate/actors.yaml
-actors:
+# .gauntlet/users.yaml
+users:
   alice:
     type: bearer
     token_env: ALICE_TOKEN       # export ALICE_TOKEN=eyJ...
@@ -78,9 +78,9 @@ actors:
     key_env: BOB_API_KEY         # export BOB_API_KEY=sk-...
 ```
 
-See the [README](../README.md#actor-authentication) for supported authentication types.
+See the [README](../README.md#user-authentication) for supported authentication types.
 
-## Run Flux Gate
+## Run Gauntlet
 
 ### CI pipeline
 
@@ -88,8 +88,8 @@ Run after all tests pass. Treat a non-zero exit code as a build failure — do n
 
 ```yaml
 # Example GitHub Actions step
-- name: Run Flux Gate
-  run: flux-gate ${{ env.STAGING_URL }}
+- name: Run Gauntlet
+  run: gauntlet ${{ env.STAGING_URL }}
   env:
     FLUX_GATE_OPERATOR_TYPE: openai
     FLUX_GATE_OPERATOR_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -104,16 +104,16 @@ Run after code is written and a staging environment is running, before marking a
 1. Write code
 2. Run existing tests — if they fail, fix and repeat
 3. Deploy to staging environment
-4. Run `flux-gate <staging-url>`
+4. Run `gauntlet <staging-url>`
 5. Interpret results (see below) and act
 
-Flux Gate is the final check before declaring work done. Do not skip it.
+Gauntlet is the final check before declaring work done. Do not skip it.
 
 See the [README](../README.md#cli) for CLI flags and invocation syntax.
 
 ## Interpret results and act
 
-Flux Gate outputs a YAML risk report:
+Gauntlet outputs a YAML risk report:
 
 ```yaml
 risk_report:
@@ -135,7 +135,7 @@ Act based on `risk_level`:
 | risk_level | Action |
 |---|---|
 | `low` | Promote or merge |
-| `medium` | Attempt fixes, re-run Flux Gate |
+| `medium` | Attempt fixes, re-run Gauntlet |
 | `high` or `critical` | Stop. Do not attempt automated fixes. Surface to a human. |
 
 A `high` or `critical` result means the agent has drifted from the intended behavior. Automated fixes are likely to make things worse. Human realignment is required.

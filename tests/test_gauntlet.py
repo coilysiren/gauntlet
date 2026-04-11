@@ -29,7 +29,7 @@ def test_runner_produces_four_iteration_report() -> None:
     assert run.risk_report.clearance is None  # no holdout evaluator provided
 
 
-def test_demo_scenario_surfaces_authz_failure() -> None:
+def test_demo_plan_surfaces_authz_failure() -> None:
     runner = GauntletRunner(
         executor=Drone(InMemoryTaskAPI()),
         attacker=DemoAttacker(),

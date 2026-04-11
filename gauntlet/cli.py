@@ -103,7 +103,7 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
         click.echo(
             f"error: missing required environment variables: {', '.join(missing)}\n"
             f"\n"
-            f"Set them before running flux-gate:\n"
+            f"Set them before running gauntlet:\n"
             f"  export {_ENV_ATTACKER_TYPE}=openai       # or: anthropic\n"
             f"  export {_ENV_ATTACKER_KEY}=sk-...\n"
             f"  export {_ENV_INSPECTOR_TYPE}=anthropic   # or: openai\n"

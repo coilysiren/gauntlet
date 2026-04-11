@@ -35,7 +35,7 @@ UserAuth = Annotated[BearerAuth | ApiKeyAuth, Field(discriminator="type")]
 
 
 class UsersConfig(GauntletModel):
-    """Actor authentication configuration loaded from ``.gauntlet/users.yaml``.
+    """User authentication configuration loaded from ``.gauntlet/users.yaml``.
 
     Each key is an user name.  Each value names the environment variables that
     hold that user's credentials — secrets are never stored in the config file.
@@ -51,7 +51,7 @@ class UsersConfig(GauntletModel):
             header: X-API-Key
             key_env: BOB_API_KEY
 
-    Actors omitted from this file fall back to the default ``X-User: <name>``
+    Users omitted from this file fall back to the default ``X-User: <name>``
     header that ``HttpExecutor`` sends automatically.
     """
 
@@ -68,11 +68,11 @@ def to_user_headers(config: UsersConfig) -> dict[str, dict[str, str]]:
         if isinstance(auth, BearerAuth):
             token = os.environ.get(auth.token_env)
             if token is None:
-                raise ValueError(f"Actor {user!r}: env var {auth.token_env!r} is not set")
+                raise ValueError(f"User {user!r}: env var {auth.token_env!r} is not set")
             headers[user] = {"Authorization": f"Bearer {token}"}
         else:
             key = os.environ.get(auth.key_env)
             if key is None:
-                raise ValueError(f"Actor {user!r}: env var {auth.key_env!r} is not set")
+                raise ValueError(f"User {user!r}: env var {auth.key_env!r} is not set")
             headers[user] = {auth.header: key}
     return headers

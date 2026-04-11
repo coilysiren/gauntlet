@@ -10,8 +10,8 @@
 ## Setup
 
 ```bash
-git clone git@github.com:coilysiren/flux-gate.git
-cd flux-gate
+git clone git@github.com:coilysiren/gauntlet.git
+cd gauntlet
 docker compose build
 uv run pre-commit install  # install git hooks
 ```
@@ -22,8 +22,8 @@ uv run pre-commit install  # install git hooks
 docker compose run --rm demo
 ```
 
-Starts the demo API (`demo_api/server.py`) and runs `flux-gate` against it.
-Outputs a full `FluxGateRun` as YAML. The demo API has a seeded authorization
+Starts the demo API (`demo_api/server.py`) and runs `gauntlet` against it.
+Outputs a full `GauntletRun` as YAML. The demo API has a seeded authorization
 flaw — expect `risk_level: critical`.
 
 ## Tests
@@ -50,7 +50,7 @@ Pre-commit hooks run automatically on every `git commit`. To run manually:
 uv run ruff check .          # lint
 uv run ruff check . --fix    # lint + auto-fix
 uv run ruff format .         # format
-uv run mypy flux_gate tests demo_api --strict  # type-check
+uv run mypy gauntlet tests demo_api --strict  # type-check
 ```
 
 ## CI

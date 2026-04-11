@@ -60,7 +60,7 @@ Respond with ONLY a valid JSON object matching this schema exactly:
 }
 
 Rules:
-- Actors are "userA" and "userB"
+- Users are "userA" and "userB"
 - Use {task_id} as a path template variable — it resolves from the "id" field in the first
   POST /tasks response body
 - Assertion kind "status_code" requires an integer "expected" field and null "rule"
