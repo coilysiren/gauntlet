@@ -4,19 +4,19 @@ Workflow guide for AI agents operating in CI pipelines or agentic dark factory l
 
 ## When to run Gauntlet
 
-Run Gauntlet after your existing tests pass and before promoting or merging. It is not a test runner — it assumes the code and its tests share the same blind spots, because they were likely written by the same agent. Running it before promotion adds a second adversarial pass from a model that has no knowledge of how the code was written.
+Run Gauntlet after your existing tests pass and before promoting or merging. It is not a test runner — it assumes the code and its tests share the same blind spots, because they were likely written by the same agent. Running it before promotion adds a second inspection pass from a model that has no knowledge of how the code was written.
 
-Place it as the final gate in your CI pipeline or agentic loop.
+Place it as the final checkpoint in your CI pipeline or agentic loop.
 
 ## Set up credentials
 
 Export credentials for both roles before running:
 
 ```bash
-export FLUX_GATE_OPERATOR_TYPE=openai
-export FLUX_GATE_OPERATOR_KEY=sk-...
-export FLUX_GATE_ADVERSARY_TYPE=anthropic
-export FLUX_GATE_ADVERSARY_KEY=sk-ant-...
+export GAUNTLET_ATTACKER_TYPE=openai
+export GAUNTLET_ATTACKER_KEY=sk-...
+export GAUNTLET_INSPECTOR_TYPE=anthropic
+export GAUNTLET_INSPECTOR_KEY=sk-ant-...
 ```
 
 Using different providers for Attacker and Inspector is intentional — model diversity reduces shared blind spots. Default models are `gpt-4o` (OpenAI) and `claude-opus-4-5` (Anthropic).
@@ -91,10 +91,10 @@ Run after all tests pass. Treat a non-zero exit code as a build failure — do n
 - name: Run Gauntlet
   run: gauntlet ${{ env.STAGING_URL }}
   env:
-    FLUX_GATE_OPERATOR_TYPE: openai
-    FLUX_GATE_OPERATOR_KEY: ${{ secrets.OPENAI_API_KEY }}
-    FLUX_GATE_ADVERSARY_TYPE: anthropic
-    FLUX_GATE_ADVERSARY_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    GAUNTLET_ATTACKER_TYPE: openai
+    GAUNTLET_ATTACKER_KEY: ${{ secrets.OPENAI_API_KEY }}
+    GAUNTLET_INSPECTOR_TYPE: anthropic
+    GAUNTLET_INSPECTOR_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 ### Agentic loop

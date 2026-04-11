@@ -60,7 +60,7 @@ def test_nl_holdout_gate_blocks_failing_api() -> None:
         nl_holdout_vitals=DemoNaturalLanguageHoldoutVitals(),
         nl_vitals=DemoNaturalLanguageVitals(),
         weapon=inv,
-        gate_threshold=0.90,
+        clearance_threshold=0.90,
     )
 
     run = runner.run()
@@ -85,7 +85,7 @@ def test_holdout_gate_blocks_failing_api() -> None:
         inspector=DemoInspector(),
         holdout_vitals=DemoHoldoutVitals(),
         weapon=inv,
-        gate_threshold=0.90,
+        clearance_threshold=0.90,
     )
 
     run = runner.run()

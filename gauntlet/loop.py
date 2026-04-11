@@ -74,7 +74,7 @@ class GauntletRunner:
         assessor: WeaponAssessor | None = None,
         weapon: Weapon | None = None,
         target: Target | None = None,
-        gate_threshold: float = 0.90,
+        clearance_threshold: float = 0.90,
         fail_fast_tier: int | None = None,
     ) -> None:
         self._drone = executor
@@ -86,7 +86,7 @@ class GauntletRunner:
         self._assessor = assessor
         self._weapon = weapon
         self._target = target
-        self._gate_threshold = gate_threshold
+        self._clearance_threshold = clearance_threshold
         self._fail_fast_tier = fail_fast_tier
 
     def run(self, iterations: list[IterationSpec] | None = None) -> GauntletRun:
@@ -146,7 +146,7 @@ class GauntletRunner:
             iterations=records,
             holdout_results=holdout_results,
             weapon_assessment=weapon_assessment,
-            risk_report=_build_risk_report(records, holdout_results, self._gate_threshold),
+            risk_report=_build_risk_report(records, holdout_results, self._clearance_threshold),
         )
 
     def _blocked_by_preflight(self, assessment: WeaponAssessment) -> GauntletRun:
@@ -172,7 +172,7 @@ class GauntletRunner:
                 clearance=Clearance(
                     passed=False,
                     holdout_satisfaction_score=0.0,
-                    threshold=self._gate_threshold,
+                    threshold=self._clearance_threshold,
                     recommendation="block",
                     rationale=rationale,
                 ),
@@ -183,7 +183,7 @@ class GauntletRunner:
 def _build_risk_report(
     records: list[IterationRecord],
     holdout_results: list[ExecutionResult],
-    gate_threshold: float,
+    clearance_threshold: float,
 ) -> RiskReport:
     all_findings = [finding for record in records for finding in record.findings]
     coverage = sorted(
@@ -202,7 +202,7 @@ def _build_risk_report(
     confidence_score = _confidence_score(all_findings)
     risk_level = _risk_level(all_findings)
 
-    clearance = _build_clearance(holdout_results, gate_threshold) if holdout_results else None
+    clearance = _build_clearance(holdout_results, clearance_threshold) if holdout_results else None
 
     return RiskReport(
         confidence_score=confidence_score,

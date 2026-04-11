@@ -15,10 +15,10 @@ services:
       api:
         condition: service_healthy
     environment:
-      - FLUX_GATE_OPERATOR_TYPE
-      - FLUX_GATE_OPERATOR_KEY
-      - FLUX_GATE_ADVERSARY_TYPE
-      - FLUX_GATE_ADVERSARY_KEY
+      - GAUNTLET_ATTACKER_TYPE
+      - GAUNTLET_ATTACKER_KEY
+      - GAUNTLET_INSPECTOR_TYPE
+      - GAUNTLET_INSPECTOR_KEY
 
   test:
     build: .

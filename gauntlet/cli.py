@@ -134,7 +134,7 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
                 assessor=DemoWeaponAssessor() if inv else None,
                 weapon=inv,
                 target=tgt,
-                gate_threshold=threshold,
+                clearance_threshold=threshold,
                 fail_fast_tier=0 if fail_fast else None,
             )
 
@@ -146,9 +146,9 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
 
             click.echo(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
 
-            gate = run.risk_report.clearance
-            if gate and gate.recommendation == "block":
-                click.echo(f"gate: BLOCKED — {gate.rationale}", err=True)
+            clearance = run.risk_report.clearance
+            if clearance and clearance.recommendation == "block":
+                click.echo(f"clearance: BLOCKED — {clearance.rationale}", err=True)
                 blocked = True
 
     if blocked:

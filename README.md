@@ -11,10 +11,10 @@ AI-written code can look correct — following conventions, passing linting, rea
 Set your LLM credentials, then point Gauntlet at a running API:
 
 ```bash
-export FLUX_GATE_OPERATOR_TYPE=openai
-export FLUX_GATE_OPERATOR_KEY=sk-...
-export FLUX_GATE_ADVERSARY_TYPE=anthropic
-export FLUX_GATE_ADVERSARY_KEY=sk-ant-...
+export GAUNTLET_ATTACKER_TYPE=openai
+export GAUNTLET_ATTACKER_KEY=sk-...
+export GAUNTLET_INSPECTOR_TYPE=anthropic
+export GAUNTLET_INSPECTOR_KEY=sk-ant-...
 
 git clone git@github.com:coilysiren/gauntlet.git
 cd gauntlet
@@ -41,10 +41,10 @@ each with a pair of environment variables:
 
 | Variable | Description |
 |---|---|
-| `FLUX_GATE_OPERATOR_TYPE` | LLM provider for the Attacker: `openai` or `anthropic` |
-| `FLUX_GATE_OPERATOR_KEY` | API key for the Attacker's provider |
-| `FLUX_GATE_ADVERSARY_TYPE` | LLM provider for the Inspector: `openai` or `anthropic` |
-| `FLUX_GATE_ADVERSARY_KEY` | API key for the Inspector's provider |
+| `GAUNTLET_ATTACKER_TYPE` | LLM provider for the Attacker: `openai` or `anthropic` |
+| `GAUNTLET_ATTACKER_KEY` | API key for the Attacker's provider |
+| `GAUNTLET_INSPECTOR_TYPE` | LLM provider for the Inspector: `openai` or `anthropic` |
+| `GAUNTLET_INSPECTOR_KEY` | API key for the Inspector's provider |
 
 The default models are `gpt-4o` for OpenAI and `claude-opus-4-5` for Anthropic.
 Using different providers for each role is intentional — model diversity reduces blind spots.
@@ -231,7 +231,7 @@ Production dark factory — code is written and reviewed entirely by agents.
 
 Key architectural ideas adopted: **satisfaction metrics** (probabilistic 0–1 scores, not boolean pass/fail) and the principle that **plans live outside the codebase** to prevent reward-hacking (Gauntlet uses `.gauntlet/spec.yaml`).
 
-Architectural divergence: the Software Factory maintains a Digital Twin Universe — behavioral clones of third-party services that agents test against without hitting real infrastructure. Gauntlet has no twin layer; it requires a running HTTP server and sends real requests. The Software Factory is also a full code-generation pipeline; Gauntlet is only a gate. It verifies code already written, it does not write code.
+Architectural divergence: the Software Factory maintains a Digital Twin Universe — behavioral clones of third-party services that agents test against without hitting real infrastructure. Gauntlet has no twin layer; it requires a running HTTP server and sends real requests. The Software Factory is also a full code-generation pipeline; Gauntlet is only a verifier. It verifies code already written, it does not write code.
 
 ### [OctopusGarden](https://github.com/foundatron/octopusgarden)
 
