@@ -7,6 +7,10 @@ Developer reference for agents and humans working on this codebase.
 - [Architecture](docs/architecture.md) — module map, key abstractions, data flow, design decisions
 - [Development](docs/development.md) — setup, tests, linting, Docker, CI
 
+## Git workflow
+
+Commit directly to `main`. Do not open pull requests unless explicitly asked.
+
 ## Rules
 
 After any code change:
