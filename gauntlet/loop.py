@@ -2,25 +2,25 @@ from __future__ import annotations
 
 from typing import Literal
 
-from .executor import DeterministicLocalExecutor
+from .executor import Drone
 from .models import (
+    Clearance,
     ExecutionResult,
     Finding,
-    FluxGateRun,
+    GauntletRun,
     IterationRecord,
     IterationSpec,
-    MergeGate,
     RiskReport,
     Target,
     Weapon,
     WeaponAssessment,
 )
 from .roles import (
-    Adversary,
+    Attacker,
     HoldoutVitals,
+    Inspector,
     NaturalLanguageHoldoutVitals,
     NaturalLanguageVitals,
-    Operator,
     WeaponAssessor,
 )
 
@@ -32,42 +32,42 @@ def build_default_iteration_specs() -> list[IterationSpec]:
             name="broad_baseline",
             goal="broad_baseline",
             tier=0,
-            operator_prompt="Generate diverse CRUD and lifecycle scenarios.",
-            adversary_prompt="Identify anomalies and weak coverage.",
+            attacker_prompt="Generate diverse CRUD and lifecycle plans.",
+            inspector_prompt="Identify anomalies and weak coverage.",
         ),
         IterationSpec(
             index=2,
             name="boundary_and_guards",
             goal="boundary_and_guards",
             tier=1,
-            operator_prompt="Target edge cases, missing fields, and schema drift.",
-            adversary_prompt="Escalate guard violations.",
+            attacker_prompt="Target edge cases, missing fields, and schema drift.",
+            inspector_prompt="Escalate guard violations.",
         ),
         IterationSpec(
             index=3,
             name="adversarial_misuse",
             goal="adversarial_misuse",
             tier=2,
-            operator_prompt="Simulate auth violations and invalid transitions.",
-            adversary_prompt="Identify security and logic failures.",
+            attacker_prompt="Simulate auth violations and invalid transitions.",
+            inspector_prompt="Identify security and logic failures.",
         ),
         IterationSpec(
             index=4,
             name="targeted_followup",
             goal="targeted_followup",
             tier=3,
-            operator_prompt="Focus only on suspicious areas.",
-            adversary_prompt="Finalize the failure model.",
+            attacker_prompt="Focus only on suspicious areas.",
+            inspector_prompt="Finalize the failure model.",
         ),
     ]
 
 
-class FluxGateRunner:
+class GauntletRunner:
     def __init__(
         self,
-        executor: DeterministicLocalExecutor,
-        operator: Operator,
-        adversary: Adversary,
+        executor: Drone,
+        attacker: Attacker,
+        inspector: Inspector,
         holdout_vitals: HoldoutVitals | None = None,
         nl_holdout_vitals: NaturalLanguageHoldoutVitals | None = None,
         nl_vitals: NaturalLanguageVitals | None = None,
@@ -78,8 +78,8 @@ class FluxGateRunner:
         fail_fast_tier: int | None = None,
     ) -> None:
         self._executor = executor
-        self._operator = operator
-        self._adversary = adversary
+        self._attacker = attacker
+        self._inspector = inspector
         self._holdout_vitals = holdout_vitals
         self._nl_holdout_vitals = nl_holdout_vitals
         self._nl_vitals = nl_vitals
@@ -89,7 +89,7 @@ class FluxGateRunner:
         self._gate_threshold = gate_threshold
         self._fail_fast_tier = fail_fast_tier
 
-    def run(self, iterations: list[IterationSpec] | None = None) -> FluxGateRun:
+    def run(self, iterations: list[IterationSpec] | None = None) -> GauntletRun:
         specs = iterations or build_default_iteration_specs()
 
         # Preflight: assess weapon quality before running any iterations.
@@ -99,7 +99,7 @@ class FluxGateRunner:
             if not weapon_assessment.proceed:
                 return self._blocked_by_preflight(weapon_assessment)
 
-        # Inject weapon and target into each iteration so the Operator can read
+        # Inject weapon and target into each iteration so the Attacker can read
         # spec.weapon.description — but never blockers, which
         # are only passed to the holdout vitals below.
         if self._weapon:
@@ -109,13 +109,13 @@ class FluxGateRunner:
 
         records: list[IterationRecord] = []
         for spec in specs:
-            scenarios = self._operator.generate_scenarios(spec, records)
-            execution_results = [self._executor.run_scenario(scenario) for scenario in scenarios]
-            findings = self._adversary.analyze(spec, execution_results)
+            plans = self._attacker.generate_plans(spec, records)
+            execution_results = [self._executor.run_plan(plan) for plan in plans]
+            findings = self._inspector.analyze(spec, execution_results)
             records.append(
                 IterationRecord(
                     spec=spec,
-                    scenarios=scenarios,
+                    plans=plans,
                     execution_results=execution_results,
                     findings=findings,
                 )
@@ -127,20 +127,20 @@ class FluxGateRunner:
                 if any(f.severity == "critical" for f in findings):
                     break
 
-        # Holdout scenarios are executed after the probe loop and their results
-        # are never fed back to the Operator or Adversary.
+        # Holdout plans are executed after the probe loop and their results
+        # are never fed back to the Attacker or Inspector.
         holdout_results: list[ExecutionResult] = []
         if self._weapon is not None:
             if self._holdout_vitals is not None:
-                for scenario in self._holdout_vitals.acceptance_scenarios(self._weapon):
-                    holdout_results.append(self._executor.run_scenario(scenario))
+                for plan in self._holdout_vitals.acceptance_plans(self._weapon):
+                    holdout_results.append(self._executor.run_plan(plan))
 
             if self._nl_holdout_vitals is not None and self._nl_vitals is not None:
-                nl_scenarios = self._nl_holdout_vitals.acceptance_scenarios(self._weapon)
+                nl_scenarios = self._nl_holdout_vitals.acceptance_plans(self._weapon)
                 for nl_scenario in nl_scenarios:
                     holdout_results.append(self._nl_vitals.evaluate(nl_scenario, self._executor))
 
-        return FluxGateRun(
+        return GauntletRun(
             weapon=self._weapon,
             target=self._target,
             iterations=records,
@@ -149,12 +149,12 @@ class FluxGateRunner:
             risk_report=_build_risk_report(records, holdout_results, self._gate_threshold),
         )
 
-    def _blocked_by_preflight(self, assessment: WeaponAssessment) -> FluxGateRun:
+    def _blocked_by_preflight(self, assessment: WeaponAssessment) -> GauntletRun:
         rationale = (
             f"Weapon quality score {assessment.quality_score:.0%} is too low to proceed. "
             f"Issues: {'; '.join(assessment.issues) or 'none'}."
         )
-        return FluxGateRun(
+        return GauntletRun(
             weapon=self._weapon,
             target=self._target,
             iterations=[],
@@ -169,7 +169,7 @@ class FluxGateRunner:
                 unexplored_surfaces=[],
                 coverage=[],
                 conclusion="Run blocked: weapon quality score below threshold.",
-                merge_gate=MergeGate(
+                clearance=Clearance(
                     passed=False,
                     holdout_satisfaction_score=0.0,
                     threshold=self._gate_threshold,
@@ -202,7 +202,7 @@ def _build_risk_report(
     confidence_score = _confidence_score(all_findings)
     risk_level = _risk_level(all_findings)
 
-    merge_gate = _build_merge_gate(holdout_results, gate_threshold) if holdout_results else None
+    clearance = _build_clearance(holdout_results, gate_threshold) if holdout_results else None
 
     return RiskReport(
         confidence_score=confidence_score,
@@ -213,11 +213,11 @@ def _build_risk_report(
         unexplored_surfaces=unexplored_surfaces,
         coverage=coverage,
         conclusion=_conclusion(risk_level, confirmed_failures),
-        merge_gate=merge_gate,
+        clearance=clearance,
     )
 
 
-def _build_merge_gate(holdout_results: list[ExecutionResult], threshold: float) -> MergeGate:
+def _build_clearance(holdout_results: list[ExecutionResult], threshold: float) -> Clearance:
     satisfaction_score = sum(r.satisfaction_score for r in holdout_results) / len(holdout_results)
     passed = satisfaction_score >= threshold
 
@@ -239,7 +239,7 @@ def _build_merge_gate(holdout_results: list[ExecutionResult], threshold: float) 
             f"is below threshold {threshold:.0%}."
         )
 
-    return MergeGate(
+    return Clearance(
         passed=passed,
         holdout_satisfaction_score=satisfaction_score,
         threshold=threshold,

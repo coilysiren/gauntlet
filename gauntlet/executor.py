@@ -12,25 +12,25 @@ from .models import (
     ExecutionStepResult,
     HttpRequest,
     HttpResponse,
-    Scenario,
+    Plan,
 )
 
 
 class Api(Protocol):
-    def send(self, actor: str, request: HttpRequest) -> HttpResponse: ...
+    def send(self, user: str, request: HttpRequest) -> HttpResponse: ...
 
 
 class HttpExecutor:
     """Sends real HTTP requests to a locally-running API process.
 
-    Each actor is identified by an ``X-Actor`` header by default. Pass
-    ``actor_headers`` to override with bearer tokens or session cookies.
+    Each user is identified by an ``X-User`` header by default. Pass
+    ``user_headers`` to override with bearer tokens or session cookies.
 
     Example::
 
         executor = HttpExecutor(
             "http://localhost:8000",
-            actor_headers={
+            user_headers={
                 "userA": {"Authorization": "Bearer token-a"},
                 "userB": {"Authorization": "Bearer token-b"},
             },
@@ -40,13 +40,13 @@ class HttpExecutor:
     def __init__(
         self,
         base_url: str,
-        actor_headers: dict[str, dict[str, str]] | None = None,
+        user_headers: dict[str, dict[str, str]] | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
-        self._actor_headers = actor_headers or {}
+        self._user_headers = user_headers or {}
 
-    def send(self, actor: str, request: HttpRequest) -> HttpResponse:
-        headers = {"X-Actor": actor, **self._actor_headers.get(actor, {})}
+    def send(self, user: str, request: HttpRequest) -> HttpResponse:
+        headers = {"X-User": user, **self._user_headers.get(user, {})}
         resp = http.request(
             request.method,
             f"{self._base_url}{request.path}",
@@ -69,36 +69,36 @@ class InMemoryTaskAPI:
         self._tasks: dict[int, dict[str, object]] = {}
         self._next_id = 1
 
-    def send(self, actor: str, request: HttpRequest) -> HttpResponse:
+    def send(self, user: str, request: HttpRequest) -> HttpResponse:
         if request.method == "POST" and request.path == "/tasks":
-            return self._create_task(actor, request)
+            return self._create_task(user, request)
         if request.method == "GET" and request.path.startswith("/tasks/"):
-            return self._get_task(actor, request)
+            return self._get_task(user, request)
         if request.method == "PATCH" and request.path.startswith("/tasks/"):
-            return self._patch_task(actor, request)
+            return self._patch_task(user, request)
         return HttpResponse(status_code=404, body={"error": "not_found"})
 
-    def _create_task(self, actor: str, request: HttpRequest) -> HttpResponse:
+    def _create_task(self, user: str, request: HttpRequest) -> HttpResponse:
         task_id = self._next_id
         self._next_id += 1
         task = {
             "id": task_id,
-            "owner": actor,
+            "owner": user,
             "title": request.body.get("title", ""),
             "completed": bool(request.body.get("completed", False)),
         }
         self._tasks[task_id] = task
         return HttpResponse(status_code=201, body=deepcopy(task))
 
-    def _get_task(self, actor: str, request: HttpRequest) -> HttpResponse:
+    def _get_task(self, user: str, request: HttpRequest) -> HttpResponse:
         task = self._tasks.get(_task_id_from_path(request.path))
         if task is None:
             return HttpResponse(status_code=404, body={"error": "not_found"})
-        if task["owner"] != actor:
+        if task["owner"] != user:
             return HttpResponse(status_code=403, body={"error": "forbidden"})
         return HttpResponse(status_code=200, body=deepcopy(task))
 
-    def _patch_task(self, actor: str, request: HttpRequest) -> HttpResponse:
+    def _patch_task(self, user: str, request: HttpRequest) -> HttpResponse:
         task = self._tasks.get(_task_id_from_path(request.path))
         if task is None:
             return HttpResponse(status_code=404, body={"error": "not_found"})
@@ -106,7 +106,7 @@ class InMemoryTaskAPI:
         # This is the seeded flaw that the adversarial loop should surface.
         task["title"] = request.body.get("title", task["title"])
         task["completed"] = request.body.get("completed", task["completed"])
-        task["last_modified_by"] = actor
+        task["last_modified_by"] = user
         return HttpResponse(status_code=200, body=deepcopy(task))
 
 
@@ -114,20 +114,20 @@ def _task_id_from_path(path: str) -> int:
     return int(path.rsplit("/", maxsplit=1)[-1])
 
 
-class DeterministicLocalExecutor:
+class Drone:
     def __init__(self, sut: Api) -> None:
         self._sut = sut
 
-    def run_scenario(self, scenario: Scenario) -> ExecutionResult:
+    def run_plan(self, plan: Plan) -> ExecutionResult:
         step_results: list[ExecutionStepResult] = []
         context: dict[str, object] = {}
-        for index, step in enumerate(scenario.steps, start=1):
+        for index, step in enumerate(plan.steps, start=1):
             request = step.request.model_copy(update={"path": step.request.path.format(**context)})
-            response = self._sut.send(step.actor, request)
+            response = self._sut.send(step.user, request)
             step_results.append(
                 ExecutionStepResult(
                     step_index=index,
-                    actor=step.actor,
+                    user=step.user,
                     request=request,
                     response=response,
                 )
@@ -136,12 +136,12 @@ class DeterministicLocalExecutor:
                 context["task_id"] = response.body["id"]
 
         assertion_results = [
-            _evaluate_assertion(assertion, step_results) for assertion in scenario.assertions
+            _evaluate_assertion(assertion, step_results) for assertion in plan.assertions
         ]
         return ExecutionResult(
-            scenario_name=scenario.name,
-            category=scenario.category,
-            goal=scenario.goal,
+            plan_name=plan.name,
+            category=plan.category,
+            goal=plan.goal,
             steps=step_results,
             assertions=assertion_results,
         )
@@ -150,7 +150,7 @@ class DeterministicLocalExecutor:
 # To add a new assertion kind: add the literal to Assertion.kind in models.py,
 # then add a branch below keyed on assertion.kind.
 # To add a new rule: add a branch inside the assertion.kind == "rule" block
-# keyed on assertion.rule. The rule string is set by the Operator when it builds
+# keyed on assertion.rule. The rule string is set by the Attacker when it builds
 # the Assertion. Add a test case in tests/test_flux_gate.py for either.
 def _evaluate_assertion(
     assertion: Assertion, step_results: list[ExecutionStepResult]

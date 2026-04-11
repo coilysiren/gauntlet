@@ -5,22 +5,22 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
-class FluxGateModel(BaseModel):
+class GauntletModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class HttpRequest(FluxGateModel):
+class HttpRequest(GauntletModel):
     method: Literal["GET", "POST", "PATCH"]
     path: str
     body: dict[str, Any] = Field(default_factory=dict)
 
 
-class HttpResponse(FluxGateModel):
+class HttpResponse(GauntletModel):
     status_code: int
     body: dict[str, Any] = Field(default_factory=dict)
 
 
-class Assertion(FluxGateModel):
+class Assertion(GauntletModel):
     kind: Literal["status_code", "rule"]
     expected: Any | None = None
     rule: str | None = None
@@ -28,21 +28,21 @@ class Assertion(FluxGateModel):
     name: str
 
 
-class ScenarioStep(FluxGateModel):
-    actor: str
+class PlanStep(GauntletModel):
+    user: str
     request: HttpRequest
 
 
-class Scenario(FluxGateModel):
+class Plan(GauntletModel):
     name: str
     category: str
     goal: str
-    steps: list[ScenarioStep]
+    steps: list[PlanStep]
     assertions: list[Assertion] = Field(default_factory=list)
 
 
-class NaturalLanguageScenario(FluxGateModel):
-    """A scenario described in plain English; interpreted at runtime by a
+class NaturalLanguagePlan(GauntletModel):
+    """A plan described in plain English; interpreted at runtime by a
     ``NaturalLanguageEvaluator`` rather than pre-defined as structured steps.
 
     No glue code, no schema maintenance — the evaluator plans its own request
@@ -51,26 +51,26 @@ class NaturalLanguageScenario(FluxGateModel):
 
     name: str
     description: str
-    actors: list[str]
+    users: list[str]
     verdict: str
 
 
-class ExecutionStepResult(FluxGateModel):
+class ExecutionStepResult(GauntletModel):
     step_index: int
-    actor: str
+    user: str
     request: HttpRequest
     response: HttpResponse
 
 
-class AssertionResult(FluxGateModel):
+class AssertionResult(GauntletModel):
     name: str
     kind: Literal["status_code", "rule", "verdict"]
     passed: bool
     detail: str
 
 
-class ExecutionResult(FluxGateModel):
-    scenario_name: str
+class ExecutionResult(GauntletModel):
+    plan_name: str
     category: str
     goal: str
     steps: list[ExecutionStepResult]
@@ -81,7 +81,7 @@ class ExecutionResult(FluxGateModel):
     def satisfaction_score(self) -> float:
         """Fraction of assertions that passed, in [0.0, 1.0].
 
-        An empty assertion list (e.g. NL probe scenarios) returns 1.0.
+        An empty assertion list (e.g. NL probe plans) returns 1.0.
         Computed automatically from ``assertions``; never set manually.
         """
         if not self.assertions:
@@ -89,7 +89,7 @@ class ExecutionResult(FluxGateModel):
         return round(sum(1 for a in self.assertions if a.passed) / len(self.assertions), 4)
 
 
-class Finding(FluxGateModel):
+class Finding(GauntletModel):
     issue: str
     severity: Literal["low", "medium", "high", "critical"]
     confidence: float = Field(ge=0.0, le=1.0)
@@ -98,11 +98,11 @@ class Finding(FluxGateModel):
     evidence: list[str] = Field(default_factory=list)
 
 
-class Weapon(FluxGateModel):
+class Weapon(GauntletModel):
     """Engineer-authored weapon that drives the adversarial loop.
 
-    ``description`` is given to the Operator to guide probe scenario generation.
-    ``blockers`` are given only to the HoldoutVitals — the Operator
+    ``description`` is given to the Attacker to guide probe plan generation.
+    ``blockers`` are given only to the HoldoutVitals — the Attacker
     never receives them, preserving the train/test separation.
     """
 
@@ -111,7 +111,7 @@ class Weapon(FluxGateModel):
     blockers: list[str]
 
 
-class WeaponAssessment(FluxGateModel):
+class WeaponAssessment(GauntletModel):
     """Result of a preflight quality check on a Weapon.
 
     When ``proceed`` is ``False``, the runner returns early without executing
@@ -125,10 +125,10 @@ class WeaponAssessment(FluxGateModel):
     proceed: bool
 
 
-class Target(FluxGateModel):
+class Target(GauntletModel):
     """Engineer-specified API surface to test a Weapon against.
 
-    ``endpoints`` lists the HTTP method+path pairs the weapon's scenarios
+    ``endpoints`` lists the HTTP method+path pairs the weapon's plans
     should exercise (e.g. ``"PATCH /tasks/{id}"``). Additional configuration
     fields will be added here as the model grows.
     """
@@ -137,25 +137,25 @@ class Target(FluxGateModel):
     endpoints: list[str]
 
 
-class IterationSpec(FluxGateModel):
+class IterationSpec(GauntletModel):
     index: int
     name: str
     goal: str
-    operator_prompt: str
-    adversary_prompt: str
+    attacker_prompt: str
+    inspector_prompt: str
     tier: int = 0
     weapon: Weapon | None = None
     target: Target | None = None
 
 
-class IterationRecord(FluxGateModel):
+class IterationRecord(GauntletModel):
     spec: IterationSpec
-    scenarios: list[Scenario]
+    plans: list[Plan]
     execution_results: list[ExecutionResult]
     findings: list[Finding]
 
 
-class MergeGate(FluxGateModel):
+class Clearance(GauntletModel):
     """Merge decision derived from holdout satisfaction score."""
 
     passed: bool
@@ -165,7 +165,7 @@ class MergeGate(FluxGateModel):
     rationale: str
 
 
-class RiskReport(FluxGateModel):
+class RiskReport(GauntletModel):
     confidence_score: float = Field(ge=0.0, le=1.0)
     risk_level: Literal["low", "medium", "high", "critical"]
     summary: list[str]
@@ -174,10 +174,10 @@ class RiskReport(FluxGateModel):
     unexplored_surfaces: list[str]
     coverage: list[str]
     conclusion: str
-    merge_gate: MergeGate | None = None
+    clearance: Clearance | None = None
 
 
-class FluxGateRun(FluxGateModel):
+class GauntletRun(GauntletModel):
     weapon: Weapon | None = None
     target: Target | None = None
     iterations: list[IterationRecord]

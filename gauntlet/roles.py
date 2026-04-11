@@ -11,36 +11,36 @@ from .models import (
     HttpRequest,
     IterationRecord,
     IterationSpec,
-    NaturalLanguageScenario,
-    Scenario,
-    ScenarioStep,
+    NaturalLanguagePlan,
+    Plan,
+    PlanStep,
     Target,
     Weapon,
     WeaponAssessment,
 )
 
 if TYPE_CHECKING:
-    from .executor import DeterministicLocalExecutor
+    from .executor import Drone
 
 
-class Operator(Protocol):
-    """Generates test scenarios for one iteration of the adversarial loop.
+class Attacker(Protocol):
+    """Generates test plans for one iteration of the adversarial loop.
 
     Receives the current iteration's goal and all prior findings. The demo
-    implementation always returns the same cross-user modification scenario;
-    a real implementation (see ``LLMOperator``) calls an LLM.
+    implementation always returns the same cross-user modification plan;
+    a real implementation (see ``LLMAttacker``) calls an LLM.
     """
 
-    def generate_scenarios(
+    def generate_plans(
         self, spec: IterationSpec, previous_iterations: list[IterationRecord]
-    ) -> list[Scenario]: ...
+    ) -> list[Plan]: ...
 
 
-class Adversary(Protocol):
+class Inspector(Protocol):
     """Analyzes execution results and returns security/logic findings.
 
     The demo implementation surfaces the authorization flaw whenever any
-    assertion fails; a real implementation (see ``LLMAdversary``) calls an LLM.
+    assertion fails; a real implementation (see ``LLMInspector``) calls an LLM.
     """
 
     def analyze(
@@ -49,37 +49,35 @@ class Adversary(Protocol):
 
 
 class HoldoutVitals(Protocol):
-    """Returns structured acceptance scenarios from a Weapon.
+    """Returns structured acceptance plans from a Weapon.
 
-    The Operator never receives these scenarios or their results — this preserves
+    The Attacker never receives these plans or their results — this preserves
     the train/test separation described in the dark factory pattern.
     """
 
-    def acceptance_scenarios(self, weapon: Weapon) -> list[Scenario]: ...
+    def acceptance_plans(self, weapon: Weapon) -> list[Plan]: ...
 
 
 class NaturalLanguageHoldoutVitals(Protocol):
-    """Converts Weapon must_hold properties into NaturalLanguageScenario objects.
+    """Converts Weapon must_hold properties into NaturalLanguagePlan objects.
 
-    Each property becomes a scenario described in plain English.  The Operator
+    Each property becomes a plan described in plain English.  The Attacker
     never sees these properties.  A ``NaturalLanguageVitals`` interprets them
     at execution time without glue code.
     """
 
-    def acceptance_scenarios(self, weapon: Weapon) -> list[NaturalLanguageScenario]: ...
+    def acceptance_plans(self, weapon: Weapon) -> list[NaturalLanguagePlan]: ...
 
 
 class NaturalLanguageVitals(Protocol):
-    """Interprets a NaturalLanguageScenario against a live system under test.
+    """Interprets a NaturalLanguagePlan against a live system under test.
 
-    A real implementation calls an LLM to plan requests from ``scenario.description``
-    and judge the outcome against ``scenario.verdict``.  The demo implementation
+    A real implementation calls an LLM to plan requests from ``plan.description``
+    and judge the outcome against ``plan.verdict``.  The demo implementation
     uses pattern-matching as a stand-in.
     """
 
-    def evaluate(
-        self, scenario: NaturalLanguageScenario, executor: DeterministicLocalExecutor
-    ) -> ExecutionResult: ...
+    def evaluate(self, plan: NaturalLanguagePlan, executor: Drone) -> ExecutionResult: ...
 
 
 class WeaponAssessor(Protocol):
@@ -93,18 +91,18 @@ class WeaponAssessor(Protocol):
     def assess(self, weapon: Weapon, target: Target | None) -> WeaponAssessment: ...
 
 
-# Shared steps and assertions for the demo authorization scenario.
+# Shared steps and assertions for the demo authorization plan.
 _AUTHZ_STEPS = [
-    ScenarioStep(
-        actor="userA",
+    PlanStep(
+        user="userA",
         request=HttpRequest(method="POST", path="/tasks", body={"title": "private task"}),
     ),
-    ScenarioStep(
-        actor="userB",
+    PlanStep(
+        user="userB",
         request=HttpRequest(method="PATCH", path="/tasks/{task_id}", body={"completed": True}),
     ),
-    ScenarioStep(
-        actor="userA",
+    PlanStep(
+        user="userA",
         request=HttpRequest(method="GET", path="/tasks/{task_id}"),
     ),
 ]
@@ -125,11 +123,11 @@ _AUTHZ_ASSERTIONS = [
 ]
 
 
-class DemoOperator:
-    def generate_scenarios(
+class DemoAttacker:
+    def generate_plans(
         self, spec: IterationSpec, previous_iterations: list[IterationRecord]
-    ) -> list[Scenario]:
-        scenario = Scenario(
+    ) -> list[Plan]:
+        plan = Plan(
             name="user_cannot_modify_other_users_task",
             category="authz",
             goal=spec.goal,
@@ -138,12 +136,12 @@ class DemoOperator:
         )
 
         if spec.index == 1:
-            return [scenario]
+            return [plan]
 
-        return [scenario.model_copy(update={"name": f"{scenario.name}_{spec.index}"})]
+        return [plan.model_copy(update={"name": f"{plan.name}_{spec.index}"})]
 
 
-class DemoAdversary:
+class DemoInspector:
     def analyze(
         self, spec: IterationSpec, execution_results: list[ExecutionResult]
     ) -> list[Finding]:
@@ -175,11 +173,11 @@ class DemoAdversary:
 
 
 class DemoHoldoutVitals:
-    """Returns the cross-user authorization scenario as a structured holdout check."""
+    """Returns the cross-user authorization plan as a structured holdout check."""
 
-    def acceptance_scenarios(self, weapon: Weapon) -> list[Scenario]:
+    def acceptance_plans(self, weapon: Weapon) -> list[Plan]:
         return [
-            Scenario(
+            Plan(
                 name="holdout_user_cannot_modify_other_users_task",
                 category="authz",
                 goal="verify ownership enforcement per must_hold properties",
@@ -190,18 +188,18 @@ class DemoHoldoutVitals:
 
 
 class DemoNaturalLanguageHoldoutVitals:
-    """Converts each must_hold property into a NaturalLanguageScenario.
+    """Converts each must_hold property into a NaturalLanguagePlan.
 
     A real implementation would parse the property with an LLM.  The demo
     passes the property text verbatim as the ``verdict``.
     """
 
-    def acceptance_scenarios(self, weapon: Weapon) -> list[NaturalLanguageScenario]:
+    def acceptance_plans(self, weapon: Weapon) -> list[NaturalLanguagePlan]:
         return [
-            NaturalLanguageScenario(
+            NaturalLanguagePlan(
                 name=f"criterion_{i}",
                 description=weapon.description,
-                actors=["userA", "userB"],
+                users=["userA", "userB"],
                 verdict=criterion,
             )
             for i, criterion in enumerate(weapon.blockers)
@@ -209,29 +207,27 @@ class DemoNaturalLanguageHoldoutVitals:
 
 
 class DemoNaturalLanguageVitals:
-    """Interprets NaturalLanguageScenarios via pattern-matching (no LLM required).
+    """Interprets NaturalLanguagePlans via pattern-matching (no LLM required).
 
-    For each scenario, it executes the hardcoded authorization test steps and
+    For each plan, it executes the hardcoded authorization test steps and
     judges the outcome by searching for expected status codes in the verdict text.
-    A real implementation would use an LLM to plan steps from ``scenario.description``
-    and reason about the response against ``scenario.verdict``.
+    A real implementation would use an LLM to plan steps from ``plan.description``
+    and reason about the response against ``plan.verdict``.
     """
 
-    def evaluate(
-        self, scenario: NaturalLanguageScenario, executor: DeterministicLocalExecutor
-    ) -> ExecutionResult:
-        probe = Scenario(
-            name=f"nl_{scenario.name}",
+    def evaluate(self, plan: NaturalLanguagePlan, executor: Drone) -> ExecutionResult:
+        probe = Plan(
+            name=f"nl_{plan.name}",
             category="nl_evaluation",
-            goal=scenario.verdict,
+            goal=plan.verdict,
             steps=_AUTHZ_STEPS,
             assertions=[],
         )
-        result = executor.run_scenario(probe)
+        result = executor.run_plan(probe)
 
         # Verdict judgment: extract expected status code from verdict text.
         step2_status = result.steps[1].response.status_code
-        if "403" in scenario.verdict:
+        if "403" in plan.verdict:
             passed = step2_status == 403
             detail = f"verdict requires 403; step 2 returned {step2_status}"
         else:
@@ -246,9 +242,9 @@ class DemoNaturalLanguageVitals:
         )
 
         return ExecutionResult(
-            scenario_name=scenario.name,
+            plan_name=plan.name,
             category="nl_evaluation",
-            goal=scenario.verdict,
+            goal=plan.verdict,
             steps=result.steps,
             assertions=[verdict_result],
         )

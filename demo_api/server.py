@@ -15,8 +15,8 @@ import sys
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
-from flux_gate import HttpRequest, InMemoryTaskAPI
-from flux_gate.models import HttpResponse
+from gauntlet import HttpRequest, InMemoryTaskAPI
+from gauntlet.models import HttpResponse
 
 _api = InMemoryTaskAPI()
 
@@ -36,12 +36,12 @@ class _Handler(BaseHTTPRequestHandler):
             self._respond(HttpResponse(status_code=200, body={"status": "ok"}))
             return
 
-        actor = self.headers.get("X-Actor", "anonymous")
+        user = self.headers.get("X-User", "anonymous")
         length = int(self.headers.get("Content-Length", 0))
         body: dict[str, Any] = json.loads(self.rfile.read(length)) if length else {}
 
         request = HttpRequest(method=method, path=self.path, body=body)  # type: ignore[arg-type]
-        response = _api.send(actor, request)
+        response = _api.send(user, request)
         self._respond(response)
 
     def _respond(self, response: HttpResponse) -> None:

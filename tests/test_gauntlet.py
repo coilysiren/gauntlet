@@ -1,12 +1,12 @@
-from flux_gate import (
-    DemoAdversary,
+from gauntlet import (
+    DemoAttacker,
     DemoHoldoutVitals,
+    DemoInspector,
     DemoNaturalLanguageHoldoutVitals,
     DemoNaturalLanguageVitals,
-    DemoOperator,
     DemoWeaponAssessor,
-    DeterministicLocalExecutor,
-    FluxGateRunner,
+    Drone,
+    GauntletRunner,
     InMemoryTaskAPI,
     Target,
     Weapon,
@@ -14,10 +14,10 @@ from flux_gate import (
 
 
 def test_runner_produces_four_iteration_report() -> None:
-    runner = FluxGateRunner(
-        executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
-        operator=DemoOperator(),
-        adversary=DemoAdversary(),
+    runner = GauntletRunner(
+        executor=Drone(InMemoryTaskAPI()),
+        attacker=DemoAttacker(),
+        inspector=DemoInspector(),
     )
 
     run = runner.run()
@@ -26,14 +26,14 @@ def test_runner_produces_four_iteration_report() -> None:
     assert run.risk_report.risk_level == "critical"
     assert "unauthorized_cross_user_modification" in run.risk_report.confirmed_failures
     assert "PATCH /tasks/1" in run.risk_report.coverage
-    assert run.risk_report.merge_gate is None  # no holdout evaluator provided
+    assert run.risk_report.clearance is None  # no holdout evaluator provided
 
 
 def test_demo_scenario_surfaces_authz_failure() -> None:
-    runner = FluxGateRunner(
-        executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
-        operator=DemoOperator(),
-        adversary=DemoAdversary(),
+    runner = GauntletRunner(
+        executor=Drone(InMemoryTaskAPI()),
+        attacker=DemoAttacker(),
+        inspector=DemoInspector(),
     )
 
     first_iteration = runner.run().iterations[0]
@@ -46,17 +46,17 @@ def test_demo_scenario_surfaces_authz_failure() -> None:
 
 
 def test_nl_holdout_gate_blocks_failing_api() -> None:
-    """NaturalLanguageScenario path: must_hold properties are parsed from the weapon."""
+    """NaturalLanguagePlan path: must_hold properties are parsed from the weapon."""
     inv = Weapon(
         title="Users cannot modify each other's tasks",
         description="The task API must enforce resource ownership.",
         blockers=["A PATCH by a non-owner is rejected with 403"],
     )
 
-    runner = FluxGateRunner(
-        executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
-        operator=DemoOperator(),
-        adversary=DemoAdversary(),
+    runner = GauntletRunner(
+        executor=Drone(InMemoryTaskAPI()),
+        attacker=DemoAttacker(),
+        inspector=DemoInspector(),
         nl_holdout_vitals=DemoNaturalLanguageHoldoutVitals(),
         nl_vitals=DemoNaturalLanguageVitals(),
         weapon=inv,
@@ -68,8 +68,8 @@ def test_nl_holdout_gate_blocks_failing_api() -> None:
     assert len(run.holdout_results) == 1
     assert run.holdout_results[0].assertions[0].kind == "verdict"
     assert run.holdout_results[0].satisfaction_score == 0.0
-    assert run.risk_report.merge_gate is not None
-    assert run.risk_report.merge_gate.recommendation == "block"
+    assert run.risk_report.clearance is not None
+    assert run.risk_report.clearance.recommendation == "block"
 
 
 def test_holdout_gate_blocks_failing_api() -> None:
@@ -79,10 +79,10 @@ def test_holdout_gate_blocks_failing_api() -> None:
         blockers=["A PATCH by a non-owner is rejected with 403"],
     )
 
-    runner = FluxGateRunner(
-        executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
-        operator=DemoOperator(),
-        adversary=DemoAdversary(),
+    runner = GauntletRunner(
+        executor=Drone(InMemoryTaskAPI()),
+        attacker=DemoAttacker(),
+        inspector=DemoInspector(),
         holdout_vitals=DemoHoldoutVitals(),
         weapon=inv,
         gate_threshold=0.90,
@@ -93,24 +93,24 @@ def test_holdout_gate_blocks_failing_api() -> None:
     assert run.weapon == inv
     assert len(run.holdout_results) == 1
     assert run.holdout_results[0].satisfaction_score == 0.0  # 0/2 assertions passed
-    assert run.risk_report.merge_gate is not None
-    assert run.risk_report.merge_gate.passed is False
-    assert run.risk_report.merge_gate.recommendation == "block"
-    assert run.risk_report.merge_gate.holdout_satisfaction_score == 0.0
+    assert run.risk_report.clearance is not None
+    assert run.risk_report.clearance.passed is False
+    assert run.risk_report.clearance.recommendation == "block"
+    assert run.risk_report.clearance.holdout_satisfaction_score == 0.0
 
 
 def test_fail_fast_tier_stops_early_on_critical_finding() -> None:
     """fail_fast_tier=0 stops after the first iteration when a critical finding appears."""
-    runner = FluxGateRunner(
-        executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
-        operator=DemoOperator(),
-        adversary=DemoAdversary(),
+    runner = GauntletRunner(
+        executor=Drone(InMemoryTaskAPI()),
+        attacker=DemoAttacker(),
+        inspector=DemoInspector(),
         fail_fast_tier=0,
     )
 
     run = runner.run()
 
-    # The demo adversary finds a critical issue in iteration 1 (tier 0),
+    # The demo inspector finds a critical issue in iteration 1 (tier 0),
     # so the loop should stop there rather than running all four iterations.
     assert len(run.iterations) == 1
     assert run.iterations[0].spec.tier == 0
@@ -125,10 +125,10 @@ def test_preflight_blocks_vague_weapon() -> None:
         blockers=["secure", "no bugs"],  # both under 20 chars
     )
 
-    runner = FluxGateRunner(
-        executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
-        operator=DemoOperator(),
-        adversary=DemoAdversary(),
+    runner = GauntletRunner(
+        executor=Drone(InMemoryTaskAPI()),
+        attacker=DemoAttacker(),
+        inspector=DemoInspector(),
         assessor=DemoWeaponAssessor(),
         weapon=vague,
     )
@@ -139,8 +139,8 @@ def test_preflight_blocks_vague_weapon() -> None:
     assert run.weapon_assessment is not None
     assert run.weapon_assessment.proceed is False
     assert run.weapon_assessment.quality_score < 0.5
-    assert run.risk_report.merge_gate is not None
-    assert run.risk_report.merge_gate.recommendation == "block"
+    assert run.risk_report.clearance is not None
+    assert run.risk_report.clearance.recommendation == "block"
 
 
 def test_preflight_passes_good_weapon() -> None:
@@ -152,10 +152,10 @@ def test_preflight_passes_good_weapon() -> None:
     )
     target = Target(title="Task endpoints", endpoints=["PATCH /tasks/{id}"])
 
-    runner = FluxGateRunner(
-        executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
-        operator=DemoOperator(),
-        adversary=DemoAdversary(),
+    runner = GauntletRunner(
+        executor=Drone(InMemoryTaskAPI()),
+        attacker=DemoAttacker(),
+        inspector=DemoInspector(),
         assessor=DemoWeaponAssessor(),
         weapon=good,
         target=target,
@@ -170,12 +170,12 @@ def test_preflight_passes_good_weapon() -> None:
 
 
 def test_run_records_target() -> None:
-    """FluxGateRun records the target passed to the runner."""
+    """GauntletRun records the target passed to the runner."""
     target = Target(title="Task endpoints", endpoints=["POST /tasks", "PATCH /tasks/{id}"])
-    runner = FluxGateRunner(
-        executor=DeterministicLocalExecutor(InMemoryTaskAPI()),
-        operator=DemoOperator(),
-        adversary=DemoAdversary(),
+    runner = GauntletRunner(
+        executor=Drone(InMemoryTaskAPI()),
+        attacker=DemoAttacker(),
+        inspector=DemoInspector(),
         target=target,
     )
     run = runner.run()

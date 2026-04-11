@@ -15,8 +15,8 @@ from .models import (
     HttpRequest,
     IterationRecord,
     IterationSpec,
-    Scenario,
-    ScenarioStep,
+    Plan,
+    PlanStep,
 )
 
 logger = logging.getLogger(__name__)
@@ -25,20 +25,20 @@ logger = logging.getLogger(__name__)
 # System prompts
 # ---------------------------------------------------------------------------
 
-_OPERATOR_SYSTEM = """\
-You are a software testing Operator in an adversarial quality-control loop.
-Your job is to generate realistic HTTP API test scenarios that probe for weaknesses.
+_ATTACKER_SYSTEM = """\
+You are a software testing Attacker in an adversarial quality-control loop.
+Your job is to generate realistic HTTP API test plans that probe for weaknesses.
 
 Respond with ONLY a valid JSON object matching this schema exactly:
 {
-  "scenarios": [
+  "plans": [
     {
       "name": "snake_case_identifier",
       "category": "authz|crud|boundary|lifecycle",
-      "goal": "one-sentence description of what this scenario tests",
+      "goal": "one-sentence description of what this plan tests",
       "steps": [
         {
-          "actor": "userA",
+          "user": "userA",
           "request": {
             "method": "GET|POST|PATCH",
             "path": "/tasks/{task_id}",
@@ -67,11 +67,11 @@ Rules:
 - Assertion kind "rule" requires rule "task_not_modified_by_other_user" and null "expected"
   (checks that last_modified_by == owner on a GET /tasks/{task_id} response)
 - step_index is 1-based
-- Generate 2–4 scenarios per call; prefer variety over repetition
+- Generate 2–4 plans per call; prefer variety over repetition
 """
 
-_ADVERSARY_SYSTEM = """\
-You are a security Adversary in an adversarial quality-control loop.
+_INSPECTOR_SYSTEM = """\
+You are a security Inspector in an adversarial quality-control loop.
 You analyze HTTP API test results and surface security weaknesses, logic failures,
 and guard violations.
 
@@ -143,31 +143,31 @@ class _AnthropicBackend:
 
 
 # ---------------------------------------------------------------------------
-# Public operator and adversary
+# Public attacker and inspector
 # ---------------------------------------------------------------------------
 
 
-class LLMOperator:
-    """LLM-backed Operator that generates test scenarios via an LLM API.
+class LLMAttacker:
+    """LLM-backed Attacker that generates test plans via an LLM API.
 
-    Configure via env vars and instantiate with ``create_operator()``.
+    Configure via env vars and instantiate with ``create_attacker()``.
     """
 
     def __init__(self, backend: _LLMBackend) -> None:
         self._backend = backend
 
-    def generate_scenarios(
+    def generate_plans(
         self, spec: IterationSpec, previous_iterations: list[IterationRecord]
-    ) -> list[Scenario]:
-        user = _operator_user_prompt(spec, previous_iterations)
-        raw = self._backend.complete(_OPERATOR_SYSTEM, user)
-        return _parse_scenarios(raw)
+    ) -> list[Plan]:
+        user = _attacker_user_prompt(spec, previous_iterations)
+        raw = self._backend.complete(_ATTACKER_SYSTEM, user)
+        return _parse_plans(raw)
 
 
-class LLMAdversary:
-    """LLM-backed Adversary that analyzes execution results via an LLM API.
+class LLMInspector:
+    """LLM-backed Inspector that analyzes execution results via an LLM API.
 
-    Configure via env vars and instantiate with ``create_adversary()``.
+    Configure via env vars and instantiate with ``create_inspector()``.
     """
 
     def __init__(self, backend: _LLMBackend) -> None:
@@ -176,8 +176,8 @@ class LLMAdversary:
     def analyze(
         self, spec: IterationSpec, execution_results: list[ExecutionResult]
     ) -> list[Finding]:
-        user = _adversary_user_prompt(spec, execution_results)
-        raw = self._backend.complete(_ADVERSARY_SYSTEM, user)
+        user = _inspector_user_prompt(spec, execution_results)
+        raw = self._backend.complete(_INSPECTOR_SYSTEM, user)
         return _parse_findings(raw)
 
 
@@ -191,24 +191,24 @@ _DEFAULT_MODELS: dict[str, str] = {
 }
 
 
-def create_operator(provider: str, api_key: str) -> LLMOperator:
-    """Instantiate an ``LLMOperator`` for the given provider.
+def create_attacker(provider: str, api_key: str) -> LLMAttacker:
+    """Instantiate an ``LLMAttacker`` for the given provider.
 
     Args:
         provider: ``"openai"`` or ``"anthropic"``
         api_key:  API key for the provider.
     """
-    return LLMOperator(_make_backend(provider, api_key))
+    return LLMAttacker(_make_backend(provider, api_key))
 
 
-def create_adversary(provider: str, api_key: str) -> LLMAdversary:
-    """Instantiate an ``LLMAdversary`` for the given provider.
+def create_inspector(provider: str, api_key: str) -> LLMInspector:
+    """Instantiate an ``LLMInspector`` for the given provider.
 
     Args:
         provider: ``"openai"`` or ``"anthropic"``
         api_key:  API key for the provider.
     """
-    return LLMAdversary(_make_backend(provider, api_key))
+    return LLMInspector(_make_backend(provider, api_key))
 
 
 def _make_backend(provider: str, api_key: str) -> _LLMBackend:
@@ -225,11 +225,11 @@ def _make_backend(provider: str, api_key: str) -> _LLMBackend:
 # ---------------------------------------------------------------------------
 
 
-def _operator_user_prompt(spec: IterationSpec, previous_iterations: list[IterationRecord]) -> str:
+def _attacker_user_prompt(spec: IterationSpec, previous_iterations: list[IterationRecord]) -> str:
     parts = [
         f"## Iteration {spec.index}: {spec.name}",
         f"Goal: {spec.goal}",
-        f"Instruction: {spec.operator_prompt}",
+        f"Instruction: {spec.attacker_prompt}",
     ]
     if spec.weapon:
         parts.append(f"Weapon: {spec.weapon.description.strip()}")
@@ -244,21 +244,21 @@ def _operator_user_prompt(spec: IterationSpec, previous_iterations: list[Iterati
             if not record.findings:
                 parts.append(f"- Iteration {record.spec.index}: no findings")
 
-    parts.append("\nGenerate test scenarios.")
+    parts.append("\nGenerate test plans.")
     return "\n".join(parts)
 
 
-def _adversary_user_prompt(spec: IterationSpec, execution_results: list[ExecutionResult]) -> str:
+def _inspector_user_prompt(spec: IterationSpec, execution_results: list[ExecutionResult]) -> str:
     parts = [
         f"## Iteration {spec.index}: {spec.name}",
-        f"Instruction: {spec.adversary_prompt}",
+        f"Instruction: {spec.inspector_prompt}",
         "\n## Execution Results",
     ]
     for result in execution_results:
-        parts.append(f"\n### Scenario: {result.scenario_name}")
+        parts.append(f"\n### Plan: {result.plan_name}")
         for step in result.steps:
             parts.append(
-                f"  Step {step.step_index} ({step.actor}): "
+                f"  Step {step.step_index} ({step.user}): "
                 f"{step.request.method} {step.request.path} → {step.response.status_code}"
             )
             if step.response.body:
@@ -275,14 +275,14 @@ def _adversary_user_prompt(spec: IterationSpec, execution_results: list[Executio
 # ---------------------------------------------------------------------------
 
 
-def _parse_scenarios(raw: str) -> list[Scenario]:
+def _parse_plans(raw: str) -> list[Plan]:
     try:
         data: dict[str, Any] = json.loads(raw)
-        scenarios: list[Scenario] = []
-        for s in data.get("scenarios", []):
+        plans: list[Plan] = []
+        for s in data.get("plans", []):
             steps = [
-                ScenarioStep(
-                    actor=step["actor"],
+                PlanStep(
+                    user=step["user"],
                     request=HttpRequest(
                         method=step["request"]["method"],
                         path=step["request"]["path"],
@@ -301,8 +301,8 @@ def _parse_scenarios(raw: str) -> list[Scenario]:
                 )
                 for a in s.get("assertions", [])
             ]
-            scenarios.append(
-                Scenario(
+            plans.append(
+                Plan(
                     name=s["name"],
                     category=s["category"],
                     goal=s["goal"],
@@ -310,9 +310,9 @@ def _parse_scenarios(raw: str) -> list[Scenario]:
                     assertions=assertions,
                 )
             )
-        return scenarios
+        return plans
     except Exception:  # noqa: BLE001
-        logger.warning("Failed to parse LLM operator response", exc_info=True)
+        logger.warning("Failed to parse LLM attacker response", exc_info=True)
         return []
 
 
@@ -333,5 +333,5 @@ def _parse_findings(raw: str) -> list[Finding]:
             )
         return findings
     except Exception:  # noqa: BLE001
-        logger.warning("Failed to parse LLM adversary response", exc_info=True)
+        logger.warning("Failed to parse LLM inspector response", exc_info=True)
         return []

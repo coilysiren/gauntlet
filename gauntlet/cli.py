@@ -7,17 +7,17 @@ from pathlib import Path
 import click
 import yaml
 
-from .auth import ActorsConfig, to_actor_headers
-from .executor import DeterministicLocalExecutor, HttpExecutor
-from .llm import create_adversary, create_operator
-from .loop import FluxGateRunner
+from .auth import UsersConfig, to_user_headers
+from .executor import Drone, HttpExecutor
+from .llm import create_attacker, create_inspector
+from .loop import GauntletRunner
 from .models import Target, Weapon
 from .roles import DemoWeaponAssessor
 
-_ENV_OPERATOR_TYPE = "FLUX_GATE_OPERATOR_TYPE"
-_ENV_OPERATOR_KEY = "FLUX_GATE_OPERATOR_KEY"
-_ENV_ADVERSARY_TYPE = "FLUX_GATE_ADVERSARY_TYPE"
-_ENV_ADVERSARY_KEY = "FLUX_GATE_ADVERSARY_KEY"
+_ENV_ATTACKER_TYPE = "GAUNTLET_ATTACKER_TYPE"
+_ENV_ATTACKER_KEY = "GAUNTLET_ATTACKER_KEY"
+_ENV_INSPECTOR_TYPE = "GAUNTLET_INSPECTOR_TYPE"
+_ENV_INSPECTOR_KEY = "GAUNTLET_INSPECTOR_KEY"
 
 
 def _load_weapons(spec: str) -> list[Weapon]:
@@ -50,24 +50,24 @@ def _load_targets(spec: str) -> list[Target]:
 @click.argument("url")
 @click.option(
     "--weapon",
-    default=".flux_gate/weapons",
+    default=".gauntlet/weapons",
     metavar="FILE_OR_DIR",
     show_default=True,
     help="Path to a Weapon YAML file, or a directory of YAML files (one weapon per file).",
 )
 @click.option(
     "--target",
-    default=".flux_gate/targets",
+    default=".gauntlet/targets",
     metavar="FILE_OR_DIR",
     show_default=True,
     help="Path to a Target YAML file, or a directory of YAML files (one target per file).",
 )
 @click.option(
-    "--actors",
-    default=".flux_gate/actors.yaml",
+    "--users",
+    default=".gauntlet/users.yaml",
     metavar="FILE",
     show_default=True,
-    help="Path to an actors YAML file defining per-actor authentication.",
+    help="Path to an users YAML file defining per-user authentication.",
 )
 @click.option(
     "--threshold",
@@ -83,21 +83,19 @@ def _load_targets(spec: str) -> list[Target]:
     show_default=True,
     help="Stop after the first critical finding.",
 )
-def main(
-    url: str, weapon: str, target: str, actors: str, threshold: float, fail_fast: bool
-) -> None:
-    operator_type = os.environ.get(_ENV_OPERATOR_TYPE, "")
-    operator_key = os.environ.get(_ENV_OPERATOR_KEY, "")
-    adversary_type = os.environ.get(_ENV_ADVERSARY_TYPE, "")
-    adversary_key = os.environ.get(_ENV_ADVERSARY_KEY, "")
+def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_fast: bool) -> None:
+    operator_type = os.environ.get(_ENV_ATTACKER_TYPE, "")
+    operator_key = os.environ.get(_ENV_ATTACKER_KEY, "")
+    adversary_type = os.environ.get(_ENV_INSPECTOR_TYPE, "")
+    adversary_key = os.environ.get(_ENV_INSPECTOR_KEY, "")
 
     missing = [
         name
         for name, val in [
-            (_ENV_OPERATOR_TYPE, operator_type),
-            (_ENV_OPERATOR_KEY, operator_key),
-            (_ENV_ADVERSARY_TYPE, adversary_type),
-            (_ENV_ADVERSARY_KEY, adversary_key),
+            (_ENV_ATTACKER_TYPE, operator_type),
+            (_ENV_ATTACKER_KEY, operator_key),
+            (_ENV_INSPECTOR_TYPE, adversary_type),
+            (_ENV_INSPECTOR_KEY, adversary_key),
         ]
         if not val
     ]
@@ -106,10 +104,10 @@ def main(
             f"error: missing required environment variables: {', '.join(missing)}\n"
             f"\n"
             f"Set them before running flux-gate:\n"
-            f"  export {_ENV_OPERATOR_TYPE}=openai       # or: anthropic\n"
-            f"  export {_ENV_OPERATOR_KEY}=sk-...\n"
-            f"  export {_ENV_ADVERSARY_TYPE}=anthropic   # or: openai\n"
-            f"  export {_ENV_ADVERSARY_KEY}=sk-ant-...",
+            f"  export {_ENV_ATTACKER_TYPE}=openai       # or: anthropic\n"
+            f"  export {_ENV_ATTACKER_KEY}=sk-...\n"
+            f"  export {_ENV_INSPECTOR_TYPE}=anthropic   # or: openai\n"
+            f"  export {_ENV_INSPECTOR_KEY}=sk-ant-...",
             err=True,
         )
         sys.exit(1)
@@ -117,22 +115,22 @@ def main(
     weapons = _load_weapons(weapon)
     targets = _load_targets(target)
 
-    actor_headers: dict[str, dict[str, str]] = {}
-    actors_path = Path(actors)
-    if actors_path.exists():
-        actor_headers = to_actor_headers(ActorsConfig(**yaml.safe_load(actors_path.read_text())))
+    user_headers: dict[str, dict[str, str]] = {}
+    users_path = Path(users)
+    if users_path.exists():
+        user_headers = to_user_headers(UsersConfig(**yaml.safe_load(users_path.read_text())))
 
-    operator = create_operator(operator_type, operator_key)
-    adversary = create_adversary(adversary_type, adversary_key)
-    executor = DeterministicLocalExecutor(HttpExecutor(url, actor_headers=actor_headers))
+    attacker = create_attacker(operator_type, operator_key)
+    inspector = create_inspector(adversary_type, adversary_key)
+    executor = Drone(HttpExecutor(url, user_headers=user_headers))
 
     blocked = False
     for inv in weapons or [None]:  # type: ignore[list-item]
         for tgt in targets or [None]:  # type: ignore[list-item]
-            runner = FluxGateRunner(
+            runner = GauntletRunner(
                 executor=executor,
-                operator=operator,
-                adversary=adversary,
+                attacker=attacker,
+                inspector=inspector,
                 assessor=DemoWeaponAssessor() if inv else None,
                 weapon=inv,
                 target=tgt,
@@ -148,7 +146,7 @@ def main(
 
             click.echo(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
 
-            gate = run.risk_report.merge_gate
+            gate = run.risk_report.clearance
             if gate and gate.recommendation == "block":
                 click.echo(f"gate: BLOCKED — {gate.rationale}", err=True)
                 blocked = True

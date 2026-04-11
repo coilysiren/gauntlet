@@ -1,5 +1,5 @@
 [project]
-name = "flux-gate"
+name = "gauntlet"
 version = "0.1.0"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-flux-gate = "flux_gate.cli:main"
+gauntlet = "gauntlet.cli:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -22,7 +22,7 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 markers = ["docker: requires Docker and docker compose (deselect with -m 'not docker')"]
-addopts = "--cov=flux_gate --cov-report=term-missing --cov-report=xml"
+addopts = "--cov=gauntlet --cov-report=term-missing --cov-report=xml"
 
 [tool.coverage.run]
 branch = true
