@@ -156,12 +156,12 @@ class IterationRecord(GauntletModel):
 
 
 class Clearance(GauntletModel):
-    """Merge decision derived from holdout satisfaction score."""
+    """CI gate decision derived from holdout satisfaction score."""
 
     passed: bool
     holdout_satisfaction_score: float
     threshold: float
-    recommendation: Literal["merge", "block", "review"]
+    recommendation: Literal["pass", "conditional", "block"]
     rationale: str
 
 
@@ -174,10 +174,10 @@ class RiskReport(GauntletModel):
     unexplored_surfaces: list[str]
     coverage: list[str]
     conclusion: str
-    clearance: Clearance | None = None
 
 
 class GauntletRun(GauntletModel):
+    clearance: Clearance | None = None
     weapon: Weapon | None = None
     target: Target | None = None
     iterations: list[IterationRecord]

@@ -144,12 +144,18 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
                 click.echo(f"error: {exc}", err=True)
                 sys.exit(1)
 
+            clearance = run.clearance
+            if clearance:
+                label = clearance.recommendation.upper()
+                click.echo(f"--- GAUNTLET CLEARANCE: {label} ---")
+
             click.echo(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
 
-            clearance = run.risk_report.clearance
             if clearance and clearance.recommendation == "block":
                 click.echo(f"clearance: BLOCKED — {clearance.rationale}", err=True)
                 blocked = True
+            elif clearance and clearance.recommendation == "conditional":
+                click.echo(f"clearance: CONDITIONAL — {clearance.rationale}", err=True)
 
     if blocked:
         sys.exit(1)

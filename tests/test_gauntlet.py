@@ -26,7 +26,7 @@ def test_runner_produces_four_iteration_report() -> None:
     assert run.risk_report.risk_level == "critical"
     assert "unauthorized_cross_user_modification" in run.risk_report.confirmed_failures
     assert "PATCH /tasks/1" in run.risk_report.coverage
-    assert run.risk_report.clearance is None  # no holdout evaluator provided
+    assert run.clearance is None  # no holdout evaluator provided
 
 
 def test_demo_plan_surfaces_authz_failure() -> None:
@@ -68,8 +68,8 @@ def test_nl_holdout_gate_blocks_failing_api() -> None:
     assert len(run.holdout_results) == 1
     assert run.holdout_results[0].assertions[0].kind == "verdict"
     assert run.holdout_results[0].satisfaction_score == 0.0
-    assert run.risk_report.clearance is not None
-    assert run.risk_report.clearance.recommendation == "block"
+    assert run.clearance is not None
+    assert run.clearance.recommendation == "block"
 
 
 def test_holdout_gate_blocks_failing_api() -> None:
@@ -93,10 +93,10 @@ def test_holdout_gate_blocks_failing_api() -> None:
     assert run.weapon == inv
     assert len(run.holdout_results) == 1
     assert run.holdout_results[0].satisfaction_score == 0.0  # 0/2 assertions passed
-    assert run.risk_report.clearance is not None
-    assert run.risk_report.clearance.passed is False
-    assert run.risk_report.clearance.recommendation == "block"
-    assert run.risk_report.clearance.holdout_satisfaction_score == 0.0
+    assert run.clearance is not None
+    assert run.clearance.passed is False
+    assert run.clearance.recommendation == "block"
+    assert run.clearance.holdout_satisfaction_score == 0.0
 
 
 def test_fail_fast_tier_stops_early_on_critical_finding() -> None:
@@ -139,8 +139,8 @@ def test_preflight_blocks_vague_weapon() -> None:
     assert run.weapon_assessment is not None
     assert run.weapon_assessment.proceed is False
     assert run.weapon_assessment.quality_score < 0.5
-    assert run.risk_report.clearance is not None
-    assert run.risk_report.clearance.recommendation == "block"
+    assert run.clearance is not None
+    assert run.clearance.recommendation == "block"
 
 
 def test_preflight_passes_good_weapon() -> None:

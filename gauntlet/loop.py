@@ -140,13 +140,17 @@ class GauntletRunner:
                 for nl_plan in nl_plans:
                     holdout_results.append(self._nl_vitals.evaluate(nl_plan, self._drone))
 
+        risk_report, clearance = _build_risk_report(
+            records, holdout_results, self._clearance_threshold
+        )
         return GauntletRun(
+            clearance=clearance,
             weapon=self._weapon,
             target=self._target,
             iterations=records,
             holdout_results=holdout_results,
             weapon_assessment=weapon_assessment,
-            risk_report=_build_risk_report(records, holdout_results, self._clearance_threshold),
+            risk_report=risk_report,
         )
 
     def _blocked_by_preflight(self, assessment: WeaponAssessment) -> GauntletRun:
@@ -154,7 +158,15 @@ class GauntletRunner:
             f"Weapon quality score {assessment.quality_score:.0%} is too low to proceed. "
             f"Issues: {'; '.join(assessment.issues) or 'none'}."
         )
+        clearance = Clearance(
+            passed=False,
+            holdout_satisfaction_score=0.0,
+            threshold=self._clearance_threshold,
+            recommendation="block",
+            rationale=rationale,
+        )
         return GauntletRun(
+            clearance=clearance,
             weapon=self._weapon,
             target=self._target,
             iterations=[],
@@ -169,13 +181,6 @@ class GauntletRunner:
                 unexplored_surfaces=[],
                 coverage=[],
                 conclusion="Run blocked: weapon quality score below threshold.",
-                clearance=Clearance(
-                    passed=False,
-                    holdout_satisfaction_score=0.0,
-                    threshold=self._clearance_threshold,
-                    recommendation="block",
-                    rationale=rationale,
-                ),
             ),
         )
 
@@ -184,7 +189,7 @@ def _build_risk_report(
     records: list[IterationRecord],
     holdout_results: list[ExecutionResult],
     clearance_threshold: float,
-) -> RiskReport:
+) -> tuple[RiskReport, Clearance | None]:
     all_findings = [finding for record in records for finding in record.findings]
     coverage = sorted(
         {
@@ -204,7 +209,7 @@ def _build_risk_report(
 
     clearance = _build_clearance(holdout_results, clearance_threshold) if holdout_results else None
 
-    return RiskReport(
+    report = RiskReport(
         confidence_score=confidence_score,
         risk_level=risk_level,
         summary=confirmed_failures or ["no confirmed failures detected"],
@@ -213,8 +218,8 @@ def _build_risk_report(
         unexplored_surfaces=unexplored_surfaces,
         coverage=coverage,
         conclusion=_conclusion(risk_level, confirmed_failures),
-        clearance=clearance,
     )
+    return report, clearance
 
 
 def _build_clearance(holdout_results: list[ExecutionResult], threshold: float) -> Clearance:
@@ -222,12 +227,12 @@ def _build_clearance(holdout_results: list[ExecutionResult], threshold: float) -
     passed = satisfaction_score >= threshold
 
     if satisfaction_score >= threshold:
-        recommendation: Literal["merge", "block", "review"] = "merge"
+        recommendation: Literal["pass", "conditional", "block"] = "pass"
         rationale = (
             f"Holdout satisfaction score {satisfaction_score:.0%} meets threshold {threshold:.0%}."
         )
     elif satisfaction_score >= threshold * 0.8:
-        recommendation = "review"
+        recommendation = "conditional"
         rationale = (
             f"Holdout satisfaction score {satisfaction_score:.0%} is below threshold "
             f"{threshold:.0%} but within 20% — human review recommended."
