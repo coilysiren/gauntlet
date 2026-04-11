@@ -66,16 +66,15 @@ The system is split into a **deterministic core** and **non-deterministic edges*
 
 - `InMemoryTaskAPI` — in-memory REST API; pure dict operations, always same output for same input. Ships with the library as a working example SUT.
 - `DeterministicLocalExecutor` — resolves path templates, calls the SUT, evaluates assertions. Pure Python.
-- `_evaluate_assertion` — branching on `assertion.kind` and `assertion.rule`; integer and field comparisons only.
-- `_build_risk_report` and helpers — set unions, averages, threshold arithmetic. Fully reproducible.
-- `Demo*` classes (`DemoOperator`, `DemoAdversary`, `DemoHoldoutVitals`, `DemoNaturalLanguageHoldoutVitals`, `DemoNaturalLanguageVitals`, `DemoWeaponAssessor`) — hardcoded or regex-based implementations of each Protocol. Shipped with the library so users can run the full loop without API keys.
+- Assertion evaluation and risk report assembly — branching logic, set unions, averages, threshold arithmetic. Fully reproducible.
+- `Demo*` classes — hardcoded or regex-based implementations of each Protocol. Shipped with the library so users can run the full loop without API keys.
 
 **Non-deterministic (LLM or network):**
 
 - `LLMOperator` / `LLMAdversary` (`llm.py`) — call an LLM to generate scenarios and analyze findings. Output varies per call.
 - `HttpExecutor` — sends real HTTP requests; outcome depends on network and the running server.
 
-The `Demo*` classes are reference implementations of the `Operator`, `Adversary`, `HoldoutVitals`, `NaturalLanguageHoldoutVitals`, `NaturalLanguageVitals`, and `WeaponAssessor` Protocols. They exist so that `FluxGateRunner` can be exercised end-to-end in tests and examples without any external dependencies. The `LLM*` classes are the production counterparts.
+The `Demo*` classes are reference implementations of each Protocol in `roles.py`. They exist so that `FluxGateRunner` can be exercised end-to-end in tests and examples without any external dependencies. The `LLM*` classes are the production counterparts.
 
 ## Design decisions
 

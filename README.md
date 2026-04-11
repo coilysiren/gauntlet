@@ -52,13 +52,14 @@ Using different providers for each role is intentional — model diversity reduc
 ### CLI
 
 ```
-flux-gate <url> [--weapon FILE_OR_DIR] [--actors FILE] [--threshold N] [--no-fail-fast]
+flux-gate <url> [--weapon FILE_OR_DIR] [--target FILE_OR_DIR] [--actors FILE] [--threshold N] [--no-fail-fast]
 ```
 
 | Argument | Default | Description |
 |---|---|---|
 | `url` | required | Base URL of the running API |
-| `--weapon` | `.flux_gate/weapons` | Path to an [Weapon YAML](#guards) file, or a directory of YAML files (one weapon per file) |
+| `--weapon` | `.flux_gate/weapons` | Path to a [Weapon YAML](#weapons) file, or a directory of YAML files (one weapon per file) |
+| `--target` | `.flux_gate/targets` | Path to a [Target YAML](#targets) file, or a directory of YAML files (one target per file) |
 | `--actors` | `.flux_gate/actors.yaml` | Path to an [actors YAML](#actor-authentication) file |
 | `--threshold` | `0.90` | Holdout satisfaction score required to recommend merge |
 | `--fail-fast` / `--no-fail-fast` | enabled | Stop at the first critical finding; use `--no-fail-fast` to run all iterations |
@@ -66,8 +67,8 @@ flux-gate <url> [--weapon FILE_OR_DIR] [--actors FILE] [--threshold N] [--no-fai
 ```bash
 flux-gate http://localhost:8000
 flux-gate http://localhost:8000 --no-fail-fast
-flux-gate http://localhost:8000 --weapon /path/to/weapons/ --actors /path/to/actors.yaml
-flux-gate http://localhost:8000 --weapon /path/to/single_weapon.yaml
+flux-gate http://localhost:8000 --weapon /path/to/weapons/ --target /path/to/targets/ --actors /path/to/actors.yaml
+flux-gate http://localhost:8000 --weapon /path/to/single_weapon.yaml --target /path/to/single_target.yaml
 ```
 
 Output is YAML:
@@ -98,17 +99,18 @@ your-project/
 │   ├── weapons/            # one YAML file per Weapon — all loaded automatically
 │   │   ├── task_ownership.yaml
 │   │   └── task_read_isolation.yaml
-│   └── actors.yaml            # Actor auth — loaded automatically if present
+│   ├── targets/            # one YAML file per Target — all loaded automatically
+│   │   └── task_endpoints.yaml
+│   └── actors.yaml         # Actor auth — loaded automatically if present
 └── ...
 ```
 
-Override either path with `--weapon FILE_OR_DIR` or `--actors FILE`.
+Override any path with `--weapon FILE_OR_DIR`, `--target FILE_OR_DIR`, or `--actors FILE`.
 
 ### Weapons
 
-A Weapon defines a property the system must maintain under adversarial pressure.
-The `must_hold` properties are never shown to the Operator — only to the holdout evaluator —
-preserving the train/test separation.
+A Weapon defines a reusable attack strategy. The `blockers` are never shown to the Operator —
+only to the holdout evaluator — preserving the train/test separation.
 
 ```yaml
 # .flux_gate/weapons/task_ownership.yaml
@@ -116,11 +118,21 @@ title: Users cannot modify each other's tasks
 description: >
   The task API must enforce resource ownership. A user who did not create
   a task must not be able to modify or delete it.
-must_hold:
+blockers:
   - A PATCH request by a non-owner is rejected with 403
   - The task body is unchanged after an unauthorized PATCH attempt
   - A GET by the owner after an unauthorized PATCH returns the original data
-target_endpoints:
+```
+
+### Targets
+
+A Target defines the API surface a Weapon is tested against. One target per YAML file.
+Point multiple targets at the same weapon to test the same attack across different API surfaces.
+
+```yaml
+# .flux_gate/targets/task_endpoints.yaml
+title: Task ownership endpoints
+endpoints:
   - POST /tasks
   - PATCH /tasks/{id}
   - GET /tasks/{id}

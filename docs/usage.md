@@ -27,7 +27,7 @@ See the [README](../README.md#llm-configuration) for the full reference table.
 
 ## Write weapons
 
-Weapons define properties the system must never violate. Each weapon is a YAML file in `.flux_gate/weapons/`.
+Weapons define attack strategies that are reusable across API surfaces. Each weapon is a YAML file in `.flux_gate/weapons/`.
 
 ```yaml
 # .flux_gate/weapons/task_ownership.yaml
@@ -35,22 +35,32 @@ title: Users cannot modify each other's tasks
 description: >
   The task API must enforce resource ownership. A user who did not create
   a task must not be able to modify or delete it.
-must_hold:
+blockers:
   - A PATCH request by a non-owner is rejected with 403
   - The task body is unchanged after an unauthorized PATCH attempt
   - A GET by the owner after an unauthorized PATCH returns the original data
-target_endpoints:
+```
+
+**The train/test split:** `blockers` are never shown to the Operator — only to the holdout evaluator. This means the agent that wrote the code cannot inadvertently write code that passes by knowing what the checks are. Keep `blockers` statements specific and falsifiable.
+
+Tips:
+- One weapon per file — name the file after the property it protects (e.g. `task_ownership.yaml`)
+- `blockers` statements should describe observable HTTP behavior, not implementation details
+
+## Write targets
+
+Targets define the API surface a weapon is tested against. Each target is a YAML file in `.flux_gate/targets/`.
+
+```yaml
+# .flux_gate/targets/task_endpoints.yaml
+title: Task ownership endpoints
+endpoints:
   - POST /tasks
   - PATCH /tasks/{id}
   - GET /tasks/{id}
 ```
 
-**The train/test split:** `must_hold` properties are never shown to the Operator — only to the holdout evaluator. This means the agent that wrote the code cannot inadvertently write code that passes by knowing what the checks are. Keep `must_hold` statements specific and falsifiable.
-
-Tips:
-- One property per file — name the file after the property it protects (e.g. `task_ownership.yaml`)
-- `must_hold` statements should describe observable HTTP behavior, not implementation details
-- `target_endpoints` scopes the Operator to the relevant API surface
+One weapon can be paired with many targets — the runner executes one pass per weapon/target combination. If no targets are configured, each weapon runs without a specific target.
 
 ### Actor authentication
 
