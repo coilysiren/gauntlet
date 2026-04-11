@@ -132,6 +132,15 @@ Add a branch keyed on `assertion.rule` inside the `"guard"` block of
 | `coverage` | sorted set of `"METHOD /path"` strings from every executed step |
 | `unexplored_surfaces` | union of `finding.next_targets` across all findings |
 
+## Implementation notes
+
+- All data models live in `flux_gate/models.py`. Add fields there, nowhere else.
+- `Operator` and `Adversary` are structural protocols — no base class needed.
+- `extra="forbid"` on all models: unknown fields raise at construction time.
+- The 4-iteration loop is fixed in `loop.py:build_default_iteration_specs()`.
+- `InMemoryTaskAPI` contains an intentional authorization flaw — tests rely on it.
+- `demo_api/server.py` exposes `InMemoryTaskAPI` over HTTP; used by `docker compose run --rm demo`.
+
 ## Design decisions
 
 **Why Pydantic?** All interchange objects are `BaseModel` subclasses with

@@ -20,12 +20,3 @@ After any code change:
 3. Run `uv run mypy flux_gate tests main.py demo_api --strict` — no type errors
 
 Pre-commit enforces rules 2 and 3 automatically on `git commit`.
-
-## Key facts
-
-- All data models live in `flux_gate/models.py`. Add fields there, nowhere else.
-- `Operator` and `Adversary` are structural protocols — no base class needed.
-- `extra="forbid"` on all models: unknown fields raise at construction time.
-- The 4-iteration loop is fixed in `loop.py:build_default_iteration_specs()`.
-- `InMemoryTaskAPI` contains an intentional authorization flaw — tests rely on it.
-- `demo_api/server.py` exposes `InMemoryTaskAPI` over HTTP; used by `docker compose run --rm demo`.
