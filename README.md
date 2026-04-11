@@ -207,10 +207,10 @@ flux_gate_run:
       adversary: identify anomalies and weak coverage
 
     iteration_2:
-      goal: boundary_and_invariants
+      goal: boundary_and_guards
       operator: target edge cases, missing fields, schema drift
       execute: run refined scenarios
-      adversary: escalate invariant violations
+      adversary: escalate guard violations
 
     iteration_3:
       goal: adversarial_misuse
@@ -256,7 +256,7 @@ scenario:
     - type: status_code
       expected: 403                     # bob should have been stopped
 
-    - type: invariant
+    - type: guard
       rule: task_not_modified_by_other_user
 ```
 
@@ -300,7 +300,7 @@ finding:
   next_targets:
     - ownership check on DELETE (probably also missing)
     - task list endpoint — can bob see alice's tasks too?
-    - partial update invariants under concurrent writes
+    - partial update guards under concurrent writes
 ```
 
 ### Final Output
@@ -313,7 +313,7 @@ risk_report:
   summary:
     - any authenticated user can overwrite any other user's task
     - PATCH applies writes without checking resource ownership
-    - invariants broken under partial update — completed flips silently
+    - guards broken under partial update — completed flips silently
 
   coverage:
     endpoints_tested:
