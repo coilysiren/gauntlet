@@ -11,7 +11,7 @@ from .auth import UsersConfig, to_user_headers
 from .executor import Drone, HttpExecutor
 from .llm import create_attacker, create_inspector
 from .loop import GauntletRunner
-from .models import Target, Weapon
+from .models import ExecutionResult, Target, Weapon
 from .roles import DemoWeaponAssessor
 
 _ENV_ATTACKER_TYPE = "GAUNTLET_ATTACKER_TYPE"
@@ -149,6 +149,9 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
                 label = clearance.recommendation.upper()
                 click.echo(f"--- GAUNTLET CLEARANCE: {label} ---")
 
+            if run.holdout_results:
+                _print_holdout_summary(run.holdout_results)
+
             click.echo(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
 
             if clearance and clearance.recommendation == "block":
@@ -159,3 +162,15 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
 
     if blocked:
         sys.exit(1)
+
+
+def _print_holdout_summary(holdout_results: list[ExecutionResult]) -> None:
+    total = len(holdout_results)
+    passed = sum(1 for r in holdout_results if r.satisfaction_score == 1.0)
+    failed = total - passed
+    status = "ALL PASSED" if failed == 0 else f"{failed} FAILED"
+    click.echo(f"--- HIDDEN VITALS: {passed}/{total} passed ({status}) ---")
+    click.echo(
+        f"    {total} acceptance criteria evaluated against unseen holdout vitals\n"
+        f"    (withheld from attacker — independent verification)"
+    )
