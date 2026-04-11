@@ -45,7 +45,7 @@ blockers:
 
 Tips:
 - One weapon per file — name the file after the property it protects (e.g. `task_ownership.yaml`)
-- `blockers` statements should describe observable HTTP behavior, not implementation details
+- `blockers` are Vitals — externally observable truths about system behavior. Write them as falsifiable statements about what the system does, not how it does it, and not in terms specific to any execution surface
 
 ## Write targets
 

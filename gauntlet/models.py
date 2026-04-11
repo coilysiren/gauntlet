@@ -115,8 +115,9 @@ class Weapon(GauntletModel):
     """Engineer-authored weapon that drives the adversarial loop.
 
     ``description`` (exposed via ``WeaponBrief``) is given to the Attacker to
-    guide probe plan generation.  ``blockers`` are given only to the
-    HoldoutVitals — the Attacker never receives them, preserving the
+    guide probe plan generation.  ``blockers`` are the Weapon's Vitals —
+    externally observable truths about expected system behavior — given only
+    to the HoldoutVitals.  The Attacker never receives them, preserving the
     train/test separation.
 
     Use ``Weapon.brief()`` to produce the attacker-safe view.

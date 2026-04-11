@@ -6,7 +6,7 @@ The name comes from "running the gauntlet": a challenge where you must survive a
 
 AI-written code can look correct — following conventions, passing linting, reading plausibly — while hiding behavioral failures that only surface under real use. Traditional tests don't catch this because the same agent that wrote the code also wrote the tests, sharing the same blind spots. Gauntlet is built for this: the Inspector assumes the code is broken and generates plans the code author never considered, and the `blockers` in each Weapon are never shown to the Attacker, preserving a real train/test split that prevents the agent from inadvertently writing code that passes by knowing what the tests check.
 
-> An **Attacker** uses a **Weapon** aimed at a **Target** to generate **Plans**. A **User** performs those Plans using a **Drone**. An **Inspector** watches and surfaces **Findings**. This produces a **Vitals** readout that's checked against the **Blockers** to determine the **Clearance**.
+> An **Attacker** uses a **Weapon** aimed at a **Target** to generate **Plans**. A **Drone** executes those Plans as a **User**. An **Inspector** watches and surfaces **Findings**. Hidden **Vitals** — externally observable truths about expected system behavior — are checked independently to produce a **Clearance**.
 
 ## Quick start
 
@@ -111,8 +111,7 @@ Override any path with `--weapon FILE_OR_DIR`, `--target FILE_OR_DIR`, or `--use
 
 ### Weapons
 
-A Weapon defines a reusable attack strategy. The `blockers` are never shown to the Attacker —
-only to the holdout evaluator — preserving the train/test separation.
+A Weapon defines a reusable attack strategy. The `blockers` are the Weapon's **Vitals** — externally observable truths about expected system behavior — never shown to the Attacker, preserving the train/test separation.
 
 ```yaml
 # .gauntlet/weapons/task_ownership.yaml

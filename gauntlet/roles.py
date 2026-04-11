@@ -49,21 +49,22 @@ class Inspector(Protocol):
 
 
 class HoldoutVitals(Protocol):
-    """Returns structured acceptance plans from a Weapon.
+    """Converts a Weapon's Vitals (blockers) into executable acceptance plans.
 
-    The Attacker never receives these plans or their results — this preserves
-    the train/test separation described in the dark factory pattern.
+    Vitals are externally observable truths about expected system behavior.
+    The Attacker never receives these plans or their results, preserving the
+    train/test separation.
     """
 
     def acceptance_plans(self, weapon: Weapon) -> list[Plan]: ...
 
 
 class NaturalLanguageHoldoutVitals(Protocol):
-    """Converts Weapon blockers into NaturalLanguagePlan objects.
+    """Converts a Weapon's Vitals (blockers) into NaturalLanguagePlan objects.
 
-    Each property becomes a plan described in plain English.  The Attacker
-    never sees these properties.  A ``NaturalLanguageVitals`` interprets them
-    at execution time without glue code.
+    Each vital becomes a plan described in plain English. The Attacker never
+    sees these vitals. A ``NaturalLanguageVitals`` interprets them at execution
+    time without glue code.
     """
 
     def acceptance_plans(self, weapon: Weapon) -> list[NaturalLanguagePlan]: ...
