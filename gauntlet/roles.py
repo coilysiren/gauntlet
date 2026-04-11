@@ -153,6 +153,13 @@ class DemoInspector:
                 continue
 
             evidence = [f"{a.name}: {a.detail}" for a in failed_assertions]
+            reproduction_steps = [
+                f"Step {s.step_index} ({s.user}): {s.request.method} {s.request.path}"
+                + (f" body={s.request.body}" if s.request.body else "")
+                + f" → {s.response.status_code}"
+                for s in result.steps
+            ]
+            violated_blocker = failed_assertions[0].name if failed_assertions else None
             findings.append(
                 Finding(
                     issue="unauthorized_cross_user_modification",
@@ -168,6 +175,9 @@ class DemoInspector:
                         "partial update guards",
                     ],
                     evidence=evidence,
+                    reproduction_steps=reproduction_steps,
+                    traces=result.steps,
+                    violated_blocker=violated_blocker,
                 )
             )
         return findings

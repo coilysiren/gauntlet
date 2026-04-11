@@ -92,7 +92,13 @@ Respond with ONLY a valid JSON object matching this schema exactly:
       "confidence": 0.85,
       "rationale": "explanation of why this is a problem",
       "next_targets": ["area to probe next"],
-      "evidence": ["specific observation from the execution results"]
+      "evidence": ["specific observation from the execution results"],
+      "reproduction_steps": [
+        "Step 1: POST /tasks as userA to create a task",
+        "Step 2: PATCH /tasks/{id} as userB — expect 403, got 200"
+      ],
+      "violated_blocker": "exact blocker text that was violated, or null if unknown",
+      "plan_name": "name of the plan whose steps demonstrate this finding"
     }
   ]
 }
@@ -102,6 +108,11 @@ Severity guide:
 - high: privilege escalation, sensitive data exposure
 - medium: information leak, unexpected state change
 - low: minor policy violation, cosmetic issue
+
+Guidelines for evidence-grade findings:
+- reproduction_steps must be ordered, concrete steps an engineer can follow to reproduce the issue
+- violated_blocker must quote the exact expected-behavior statement that was violated, or null
+- plan_name must match one of the plan names in the execution results so traces can be attached
 
 Return an empty findings list if nothing suspicious was observed.
 """
@@ -186,7 +197,7 @@ class LLMInspector:
     ) -> list[Finding]:
         user = _inspector_user_prompt(spec, execution_results)
         raw = self._backend.complete(_INSPECTOR_SYSTEM, user)
-        return _parse_findings(raw)
+        return _parse_findings(raw, execution_results)
 
 
 # ---------------------------------------------------------------------------
@@ -324,11 +335,17 @@ def _parse_plans(raw: str) -> list[Plan]:
         return []
 
 
-def _parse_findings(raw: str) -> list[Finding]:
+def _parse_findings(
+    raw: str, execution_results: list[ExecutionResult] | None = None
+) -> list[Finding]:
     try:
         data: dict[str, Any] = json.loads(raw)
+        results_by_name = {r.plan_name: r for r in (execution_results or [])}
         findings: list[Finding] = []
         for f in data.get("findings", []):
+            plan_name = f.get("plan_name", "")
+            matched = results_by_name.get(plan_name)
+            traces = matched.steps if matched else []
             findings.append(
                 Finding(
                     issue=f["issue"],
@@ -337,6 +354,9 @@ def _parse_findings(raw: str) -> list[Finding]:
                     rationale=f["rationale"],
                     next_targets=f.get("next_targets", []),
                     evidence=f.get("evidence", []),
+                    reproduction_steps=f.get("reproduction_steps", []),
+                    traces=traces,
+                    violated_blocker=f.get("violated_blocker"),
                 )
             )
         return findings

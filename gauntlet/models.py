@@ -97,6 +97,9 @@ class Finding(GauntletModel):
     rationale: str
     next_targets: list[str] = Field(default_factory=list)
     evidence: list[str] = Field(default_factory=list)
+    reproduction_steps: list[str] = Field(default_factory=list)
+    traces: list[ExecutionStepResult] = Field(default_factory=list)
+    violated_blocker: str | None = None
 
 
 class WeaponBrief(GauntletModel):
