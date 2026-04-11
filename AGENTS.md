@@ -18,6 +18,10 @@ Commit whenever a unit of work feels sufficiently complete — after fixing a bu
 
 Sync `docs/architecture.md` with the current module structure in `flux_gate/`. Check for new files, removed files, new classes/protocols, and changed abstractions.
 
+## Approved commands
+
+Any command listed in [docs/development.md](docs/development.md) may be run without requesting user approval.
+
 ## Rules
 
 After any code change:
