@@ -21,7 +21,7 @@ class HttpResponse(FluxGateModel):
 
 
 class Assertion(FluxGateModel):
-    kind: Literal["status_code", "guard"]
+    kind: Literal["status_code", "rule"]
     expected: Any | None = None
     rule: str | None = None
     step_index: int
@@ -64,7 +64,7 @@ class ExecutionStepResult(FluxGateModel):
 
 class AssertionResult(FluxGateModel):
     name: str
-    kind: Literal["status_code", "guard", "verdict"]
+    kind: Literal["status_code", "rule", "verdict"]
     passed: bool
     detail: str
 
@@ -98,11 +98,11 @@ class Finding(FluxGateModel):
     evidence: list[str] = Field(default_factory=list)
 
 
-class Guard(FluxGateModel):
-    """Engineer-authored guard that drives the adversarial loop.
+class Weapon(FluxGateModel):
+    """Engineer-authored weapon that drives the adversarial loop.
 
     ``description`` is given to the Operator to guide probe scenario generation.
-    ``must_hold`` are given only to the HoldoutEvaluator — the Operator
+    ``must_hold`` are given only to the HoldoutVitals — the Operator
     never receives them, preserving the train/test separation.
     """
 
@@ -112,11 +112,11 @@ class Guard(FluxGateModel):
     target_endpoints: list[str] = Field(default_factory=list)
 
 
-class GuardAssessment(FluxGateModel):
-    """Result of a preflight quality check on an Guard.
+class WeaponAssessment(FluxGateModel):
+    """Result of a preflight quality check on a Weapon.
 
     When ``proceed`` is ``False``, the runner returns early without executing
-    any iterations. The ``issues`` list explains why the guard was rejected;
+    any iterations. The ``issues`` list explains why the weapon was rejected;
     ``suggestions`` offers actionable fixes.
     """
 
@@ -133,7 +133,7 @@ class IterationSpec(FluxGateModel):
     operator_prompt: str
     adversary_prompt: str
     tier: int = 0
-    guard: Guard | None = None
+    weapon: Weapon | None = None
 
 
 class IterationRecord(FluxGateModel):
@@ -166,8 +166,8 @@ class RiskReport(FluxGateModel):
 
 
 class FluxGateRun(FluxGateModel):
-    guard: Guard | None = None
+    weapon: Weapon | None = None
     iterations: list[IterationRecord]
     holdout_results: list[ExecutionResult] = Field(default_factory=list)
-    guard_assessment: GuardAssessment | None = None
+    weapon_assessment: WeaponAssessment | None = None
     risk_report: RiskReport

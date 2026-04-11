@@ -1,5 +1,5 @@
 from .auth import ActorsConfig, ApiKeyAuth, BearerAuth, to_actor_headers
-from .executor import DeterministicLocalExecutor, HttpExecutor, InMemoryTaskAPI
+from .executor import Api, DeterministicLocalExecutor, HttpExecutor, InMemoryTaskAPI
 from .llm import LLMAdversary, LLMOperator, create_adversary, create_operator
 from .loop import FluxGateRunner, build_default_iteration_specs
 from .models import (
@@ -9,8 +9,6 @@ from .models import (
     ExecutionStepResult,
     Finding,
     FluxGateRun,
-    Guard,
-    GuardAssessment,
     HttpRequest,
     HttpResponse,
     IterationRecord,
@@ -20,28 +18,31 @@ from .models import (
     RiskReport,
     Scenario,
     ScenarioStep,
+    Weapon,
+    WeaponAssessment,
 )
 from .roles import (
     DemoAdversary,
-    DemoGuardAssessor,
-    DemoHoldoutEvaluator,
-    DemoNaturalLanguageEvaluator,
-    DemoNaturalLanguageHoldoutEvaluator,
+    DemoHoldoutVitals,
+    DemoNaturalLanguageHoldoutVitals,
+    DemoNaturalLanguageVitals,
     DemoOperator,
+    DemoWeaponAssessor,
 )
 
 __all__ = [
     "ActorsConfig",
+    "Api",
     "ApiKeyAuth",
     "Assertion",
     "AssertionResult",
     "BearerAuth",
     "DemoAdversary",
-    "DemoHoldoutEvaluator",
-    "DemoGuardAssessor",
-    "DemoNaturalLanguageEvaluator",
-    "DemoNaturalLanguageHoldoutEvaluator",
+    "DemoHoldoutVitals",
+    "DemoNaturalLanguageHoldoutVitals",
+    "DemoNaturalLanguageVitals",
     "DemoOperator",
+    "DemoWeaponAssessor",
     "DeterministicLocalExecutor",
     "ExecutionResult",
     "ExecutionStepResult",
@@ -52,8 +53,6 @@ __all__ = [
     "HttpRequest",
     "HttpResponse",
     "InMemoryTaskAPI",
-    "Guard",
-    "GuardAssessment",
     "IterationRecord",
     "IterationSpec",
     "LLMAdversary",
@@ -63,6 +62,8 @@ __all__ = [
     "RiskReport",
     "Scenario",
     "ScenarioStep",
+    "Weapon",
+    "WeaponAssessment",
     "build_default_iteration_specs",
     "create_adversary",
     "create_operator",

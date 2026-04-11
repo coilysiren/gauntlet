@@ -25,12 +25,12 @@ In CI, set these as secrets. In an agentic loop, they are inherited from the env
 
 See the [README](../README.md#llm-configuration) for the full reference table.
 
-## Write guards
+## Write weapons
 
-Guards define properties the system must never violate. Each guard is a YAML file in `.flux_gate/guards/`.
+Weapons define properties the system must never violate. Each weapon is a YAML file in `.flux_gate/weapons/`.
 
 ```yaml
-# .flux_gate/guards/task_ownership.yaml
+# .flux_gate/weapons/task_ownership.yaml
 title: Users cannot modify each other's tasks
 description: >
   The task API must enforce resource ownership. A user who did not create
@@ -132,4 +132,4 @@ A `high` or `critical` result means the agent has drifted from the intended beha
 
 ### Accumulate failure knowledge
 
-Save the `confirmed_failures` from each run. Over time this becomes a knowledge base of failure patterns. Reference it when writing new guards and reviewing code — recurring failures indicate systemic gaps in guard coverage.
+Save the `confirmed_failures` from each run. Over time this becomes a knowledge base of failure patterns. Reference it when writing new weapons and reviewing code — recurring failures indicate systemic gaps in weapon coverage.

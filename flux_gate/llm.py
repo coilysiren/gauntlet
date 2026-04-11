@@ -64,7 +64,7 @@ Rules:
 - Use {task_id} as a path template variable — it resolves from the "id" field in the first
   POST /tasks response body
 - Assertion kind "status_code" requires an integer "expected" field and null "rule"
-- Assertion kind "guard" requires rule "task_not_modified_by_other_user" and null "expected"
+- Assertion kind "rule" requires rule "task_not_modified_by_other_user" and null "expected"
   (checks that last_modified_by == owner on a GET /tasks/{task_id} response)
 - step_index is 1-based
 - Generate 2–4 scenarios per call; prefer variety over repetition
@@ -231,10 +231,10 @@ def _operator_user_prompt(spec: IterationSpec, previous_iterations: list[Iterati
         f"Goal: {spec.goal}",
         f"Instruction: {spec.operator_prompt}",
     ]
-    if spec.guard:
-        parts.append(f"Guard: {spec.guard.description.strip()}")
-        if spec.guard.target_endpoints:
-            parts.append(f"Target endpoints: {', '.join(spec.guard.target_endpoints)}")
+    if spec.weapon:
+        parts.append(f"Weapon: {spec.weapon.description.strip()}")
+        if spec.weapon.target_endpoints:
+            parts.append(f"Target endpoints: {', '.join(spec.weapon.target_endpoints)}")
 
     if previous_iterations:
         parts.append("\n## Previous Findings")

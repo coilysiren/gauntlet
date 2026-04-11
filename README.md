@@ -4,7 +4,7 @@ Flux Gate is a two-agent adversarial loop that infers software correctness by ob
 
 The name comes from the flux gate magnetometer: a sensor that detects weak fields by actively saturating a ferromagnetic core, revealing distortions that passive measurement would miss. Here, the Adversary saturates the system under test across escalating tiers of pressure until hidden failure modes become detectable — then gates promotion on whether any signal came through.
 
-AI-written code can look correct — following conventions, passing linting, reading plausibly — while hiding behavioral failures that only surface under real use. Traditional tests don't catch this because the same agent that wrote the code also wrote the tests, sharing the same blind spots. Flux Gate is built for this: the Adversary assumes the code is broken and generates scenarios the code author never considered, and the `must_hold` properties in each Guard are never shown to the Operator, preserving a real train/test split that prevents the agent from inadvertently writing code that passes by knowing what the tests check.
+AI-written code can look correct — following conventions, passing linting, reading plausibly — while hiding behavioral failures that only surface under real use. Traditional tests don't catch this because the same agent that wrote the code also wrote the tests, sharing the same blind spots. Flux Gate is built for this: the Adversary assumes the code is broken and generates scenarios the code author never considered, and the `must_hold` properties in each Weapon are never shown to the Operator, preserving a real train/test split that prevents the agent from inadvertently writing code that passes by knowing what the tests check.
 
 ## Quick start
 
@@ -52,13 +52,13 @@ Using different providers for each role is intentional — model diversity reduc
 ### CLI
 
 ```
-flux-gate <url> [--guard FILE_OR_DIR] [--actors FILE] [--threshold N] [--no-fail-fast]
+flux-gate <url> [--weapon FILE_OR_DIR] [--actors FILE] [--threshold N] [--no-fail-fast]
 ```
 
 | Argument | Default | Description |
 |---|---|---|
 | `url` | required | Base URL of the running API |
-| `--guard` | `.flux_gate/guards` | Path to an [Guard YAML](#guards) file, or a directory of YAML files (one guard per file) |
+| `--weapon` | `.flux_gate/weapons` | Path to an [Weapon YAML](#guards) file, or a directory of YAML files (one weapon per file) |
 | `--actors` | `.flux_gate/actors.yaml` | Path to an [actors YAML](#actor-authentication) file |
 | `--threshold` | `0.90` | Holdout satisfaction score required to recommend merge |
 | `--fail-fast` / `--no-fail-fast` | enabled | Stop at the first critical finding; use `--no-fail-fast` to run all iterations |
@@ -66,8 +66,8 @@ flux-gate <url> [--guard FILE_OR_DIR] [--actors FILE] [--threshold N] [--no-fail
 ```bash
 flux-gate http://localhost:8000
 flux-gate http://localhost:8000 --no-fail-fast
-flux-gate http://localhost:8000 --guard /path/to/guards/ --actors /path/to/actors.yaml
-flux-gate http://localhost:8000 --guard /path/to/single_guard.yaml
+flux-gate http://localhost:8000 --weapon /path/to/weapons/ --actors /path/to/actors.yaml
+flux-gate http://localhost:8000 --weapon /path/to/single_weapon.yaml
 ```
 
 Output is YAML:
@@ -95,23 +95,23 @@ The CLI discovers them automatically — no flags needed for the common case:
 ```
 your-project/
 ├── .flux_gate/
-│   ├── guards/            # one YAML file per Guard — all loaded automatically
+│   ├── weapons/            # one YAML file per Weapon — all loaded automatically
 │   │   ├── task_ownership.yaml
 │   │   └── task_read_isolation.yaml
 │   └── actors.yaml            # Actor auth — loaded automatically if present
 └── ...
 ```
 
-Override either path with `--guard FILE_OR_DIR` or `--actors FILE`.
+Override either path with `--weapon FILE_OR_DIR` or `--actors FILE`.
 
-### Guards
+### Weapons
 
-An Guard defines a property the system must maintain under adversarial pressure.
+A Weapon defines a property the system must maintain under adversarial pressure.
 The `must_hold` properties are never shown to the Operator — only to the holdout evaluator —
 preserving the train/test separation.
 
 ```yaml
-# .flux_gate/guards/task_ownership.yaml
+# .flux_gate/weapons/task_ownership.yaml
 title: Users cannot modify each other's tasks
 description: >
   The task API must enforce resource ownership. A user who did not create

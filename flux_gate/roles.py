@@ -8,14 +8,14 @@ from .models import (
     AssertionResult,
     ExecutionResult,
     Finding,
-    Guard,
-    GuardAssessment,
     HttpRequest,
     IterationRecord,
     IterationSpec,
     NaturalLanguageScenario,
     Scenario,
     ScenarioStep,
+    Weapon,
+    WeaponAssessment,
 )
 
 if TYPE_CHECKING:
@@ -47,28 +47,28 @@ class Adversary(Protocol):
     ) -> list[Finding]: ...
 
 
-class HoldoutEvaluator(Protocol):
-    """Returns structured acceptance scenarios from an Guard.
+class HoldoutVitals(Protocol):
+    """Returns structured acceptance scenarios from a Weapon.
 
     The Operator never receives these scenarios or their results — this preserves
     the train/test separation described in the dark factory pattern.
     """
 
-    def acceptance_scenarios(self, guard: Guard) -> list[Scenario]: ...
+    def acceptance_scenarios(self, weapon: Weapon) -> list[Scenario]: ...
 
 
-class NaturalLanguageHoldoutEvaluator(Protocol):
-    """Converts Guard must_hold properties into NaturalLanguageScenario objects.
+class NaturalLanguageHoldoutVitals(Protocol):
+    """Converts Weapon must_hold properties into NaturalLanguageScenario objects.
 
     Each property becomes a scenario described in plain English.  The Operator
-    never sees these properties.  A ``NaturalLanguageEvaluator`` interprets them
+    never sees these properties.  A ``NaturalLanguageVitals`` interprets them
     at execution time without glue code.
     """
 
-    def acceptance_scenarios(self, guard: Guard) -> list[NaturalLanguageScenario]: ...
+    def acceptance_scenarios(self, weapon: Weapon) -> list[NaturalLanguageScenario]: ...
 
 
-class NaturalLanguageEvaluator(Protocol):
+class NaturalLanguageVitals(Protocol):
     """Interprets a NaturalLanguageScenario against a live system under test.
 
     A real implementation calls an LLM to plan requests from ``scenario.description``
@@ -81,15 +81,15 @@ class NaturalLanguageEvaluator(Protocol):
     ) -> ExecutionResult: ...
 
 
-class GuardAssessor(Protocol):
-    """Evaluates an Guard for quality before the adversarial loop runs.
+class WeaponAssessor(Protocol):
+    """Evaluates a Weapon for quality before the adversarial loop runs.
 
-    Returns an ``GuardAssessment`` with a quality score, issues, suggestions,
+    Returns a ``WeaponAssessment`` with a quality score, issues, suggestions,
     and a ``proceed`` flag. When ``proceed`` is ``False``, the runner skips
     all iterations and returns a blocked merge gate.
     """
 
-    def assess(self, guard: Guard) -> GuardAssessment: ...
+    def assess(self, weapon: Weapon) -> WeaponAssessment: ...
 
 
 # Shared steps and assertions for the demo authorization scenario.
@@ -117,7 +117,7 @@ _AUTHZ_ASSERTIONS = [
     ),
     Assertion(
         name="task_not_modified_by_other_user",
-        kind="guard",
+        kind="rule",
         rule="task_not_modified_by_other_user",
         step_index=3,
     ),
@@ -173,10 +173,10 @@ class DemoAdversary:
         return findings
 
 
-class DemoHoldoutEvaluator:
+class DemoHoldoutVitals:
     """Returns the cross-user authorization scenario as a structured holdout check."""
 
-    def acceptance_scenarios(self, guard: Guard) -> list[Scenario]:
+    def acceptance_scenarios(self, weapon: Weapon) -> list[Scenario]:
         return [
             Scenario(
                 name="holdout_user_cannot_modify_other_users_task",
@@ -188,26 +188,26 @@ class DemoHoldoutEvaluator:
         ]
 
 
-class DemoNaturalLanguageHoldoutEvaluator:
+class DemoNaturalLanguageHoldoutVitals:
     """Converts each must_hold property into a NaturalLanguageScenario.
 
     A real implementation would parse the property with an LLM.  The demo
     passes the property text verbatim as the ``verdict``.
     """
 
-    def acceptance_scenarios(self, guard: Guard) -> list[NaturalLanguageScenario]:
+    def acceptance_scenarios(self, weapon: Weapon) -> list[NaturalLanguageScenario]:
         return [
             NaturalLanguageScenario(
                 name=f"criterion_{i}",
-                description=guard.description,
+                description=weapon.description,
                 actors=["userA", "userB"],
                 verdict=criterion,
             )
-            for i, criterion in enumerate(guard.must_hold)
+            for i, criterion in enumerate(weapon.must_hold)
         ]
 
 
-class DemoNaturalLanguageEvaluator:
+class DemoNaturalLanguageVitals:
     """Interprets NaturalLanguageScenarios via pattern-matching (no LLM required).
 
     For each scenario, it executes the hardcoded authorization test steps and
@@ -253,10 +253,10 @@ class DemoNaturalLanguageEvaluator:
         )
 
 
-class DemoGuardAssessor:
-    """Heuristic guard assessor for use without an LLM.
+class DemoWeaponAssessor:
+    """Heuristic weapon assessor for use without an LLM.
 
-    Scores an Guard based on:
+    Scores a Weapon based on:
     - must_hold property length  (short properties score low)
     - presence of specific HTTP status codes in properties  (score high)
     - presence of target_endpoints  (score high)
@@ -267,12 +267,12 @@ class DemoGuardAssessor:
     _MIN_CRITERION_LEN = 20
     _STATUS_CODE_RE = re.compile(r"\b[1-5]\d{2}\b")
 
-    def assess(self, guard: Guard) -> GuardAssessment:
+    def assess(self, weapon: Weapon) -> WeaponAssessment:
         issues: list[str] = []
         suggestions: list[str] = []
         score = 1.0
 
-        for criterion in guard.must_hold:
+        for criterion in weapon.must_hold:
             if len(criterion.strip()) < self._MIN_CRITERION_LEN:
                 issues.append(
                     f"Property too vague (< {self._MIN_CRITERION_LEN} chars): {criterion!r}"
@@ -282,12 +282,12 @@ class DemoGuardAssessor:
                 )
                 score -= 0.3
 
-        if not guard.target_endpoints:
+        if not weapon.target_endpoints:
             issues.append("No target_endpoints specified.")
-            suggestions.append("List the endpoints the guard covers (e.g. 'PATCH /tasks/{id}').")
+            suggestions.append("List the endpoints the weapon covers (e.g. 'PATCH /tasks/{id}').")
             score -= 0.2
 
-        has_status_code = any(self._STATUS_CODE_RE.search(c) for c in guard.must_hold)
+        has_status_code = any(self._STATUS_CODE_RE.search(c) for c in weapon.must_hold)
         if not has_status_code:
             suggestions.append(
                 "Consider adding expected HTTP status codes to must_hold properties."
@@ -295,7 +295,7 @@ class DemoGuardAssessor:
             score -= 0.1
 
         quality_score = round(max(0.0, score), 4)
-        return GuardAssessment(
+        return WeaponAssessment(
             quality_score=quality_score,
             issues=issues,
             suggestions=suggestions,

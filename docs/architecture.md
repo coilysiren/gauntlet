@@ -6,8 +6,8 @@
 flux_gate/
 ├── models.py    # all Pydantic data models — the shared vocabulary
 ├── auth.py      # actor authentication config (BearerAuth, ApiKeyAuth, ActorsConfig)
-├── roles.py     # Operator, Adversary, HoldoutEvaluator, GuardAssessor protocols + demo impls
-├── executor.py  # SystemUnderTest protocol + HttpExecutor + InMemoryTaskAPI + DeterministicLocalExecutor
+├── roles.py     # Operator, Adversary, HoldoutVitals, WeaponAssessor protocols + demo impls
+├── executor.py  # Api protocol + HttpExecutor + InMemoryTaskAPI + DeterministicLocalExecutor
 ├── llm.py       # LLMOperator and LLMAdversary backed by OpenAI or Anthropic
 ├── loop.py      # FluxGateRunner orchestration + risk report assembly
 └── cli.py       # Click entry point — reads env vars, loads config, runs FluxGateRunner
@@ -28,8 +28,8 @@ models + auth + roles + executor + llm + loop  ←  cli
 ```
 FluxGateRunner.run()
 │
-├── [preflight] GuardAssessor.assess(guard) — if assessor present
-│     └── returns GuardAssessment; blocked → short-circuit
+├── [preflight] WeaponAssessor.assess(weapon) — if assessor present
+│     └── returns WeaponAssessment; blocked → short-circuit
 │
 ├── for each IterationSpec (4 total):
 │   ├── Operator.generate_scenarios(spec, previous records)
@@ -37,7 +37,7 @@ FluxGateRunner.run()
 │   │
 │   ├── DeterministicLocalExecutor.run_scenario(scenario) × N
 │   │     ├── resolves path templates from prior step responses
-│   │     ├── calls SystemUnderTest.send(actor, request)
+│   │     ├── calls Api.send(actor, request)
 │   │     └── evaluates assertions → []AssertionResult
 │   │         returns ExecutionResult
 │   │
@@ -46,8 +46,8 @@ FluxGateRunner.run()
 │   │
 │   └── appends IterationRecord to records
 │
-├── [holdout] HoldoutEvaluator or NaturalLanguageHoldoutEvaluator
-│     └── evaluates guard acceptance scenarios (Operator never sees these)
+├── [holdout] HoldoutVitals or NaturalLanguageHoldoutVitals
+│     └── evaluates weapon acceptance scenarios (Operator never sees these)
 │
 └── _build_risk_report(records)
       ├── aggregates findings across all iterations
@@ -57,6 +57,25 @@ FluxGateRunner.run()
       ├── evaluates merge gate against gate_threshold
       └── returns RiskReport
 ```
+
+## Deterministic vs non-deterministic segments
+
+The system is split into a **deterministic core** and **non-deterministic edges**.
+
+**Deterministic (no LLM, no network):**
+
+- `InMemoryTaskAPI` — in-memory REST API; pure dict operations, always same output for same input. Ships with the library as a working example SUT.
+- `DeterministicLocalExecutor` — resolves path templates, calls the SUT, evaluates assertions. Pure Python.
+- `_evaluate_assertion` — branching on `assertion.kind` and `assertion.rule`; integer and field comparisons only.
+- `_build_risk_report` and helpers — set unions, averages, threshold arithmetic. Fully reproducible.
+- `Demo*` classes (`DemoOperator`, `DemoAdversary`, `DemoHoldoutVitals`, `DemoNaturalLanguageHoldoutVitals`, `DemoNaturalLanguageVitals`, `DemoWeaponAssessor`) — hardcoded or regex-based implementations of each Protocol. Shipped with the library so users can run the full loop without API keys.
+
+**Non-deterministic (LLM or network):**
+
+- `LLMOperator` / `LLMAdversary` (`llm.py`) — call an LLM to generate scenarios and analyze findings. Output varies per call.
+- `HttpExecutor` — sends real HTTP requests; outcome depends on network and the running server.
+
+The `Demo*` classes are reference implementations of the `Operator`, `Adversary`, `HoldoutVitals`, `NaturalLanguageHoldoutVitals`, `NaturalLanguageVitals`, and `WeaponAssessor` Protocols. They exist so that `FluxGateRunner` can be exercised end-to-end in tests and examples without any external dependencies. The `LLM*` classes are the production counterparts.
 
 ## Design decisions
 

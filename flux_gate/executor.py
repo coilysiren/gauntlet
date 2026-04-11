@@ -16,7 +16,7 @@ from .models import (
 )
 
 
-class SystemUnderTest(Protocol):
+class Api(Protocol):
     def send(self, actor: str, request: HttpRequest) -> HttpResponse: ...
 
 
@@ -115,7 +115,7 @@ def _task_id_from_path(path: str) -> int:
 
 
 class DeterministicLocalExecutor:
-    def __init__(self, sut: SystemUnderTest) -> None:
+    def __init__(self, sut: Api) -> None:
         self._sut = sut
 
     def run_scenario(self, scenario: Scenario) -> ExecutionResult:
@@ -149,7 +149,7 @@ class DeterministicLocalExecutor:
 
 # To add a new assertion kind: add the literal to Assertion.kind in models.py,
 # then add a branch below keyed on assertion.kind.
-# To add a new guard rule: add a branch inside the assertion.kind == "guard" block
+# To add a new rule: add a branch inside the assertion.kind == "rule" block
 # keyed on assertion.rule. The rule string is set by the Operator when it builds
 # the Assertion. Add a test case in tests/test_flux_gate.py for either.
 def _evaluate_assertion(
@@ -182,5 +182,5 @@ def _evaluate_assertion(
         name=assertion.name,
         kind=assertion.kind,
         passed=False,
-        detail=f"unknown guard rule: {assertion.rule}",
+        detail=f"unknown rule: {assertion.rule}",
     )
