@@ -11,7 +11,7 @@ from .auth import ActorsConfig, to_actor_headers
 from .executor import DeterministicLocalExecutor, HttpExecutor
 from .llm import create_adversary, create_operator
 from .loop import FluxGateRunner
-from .models import Weapon
+from .models import Target, Weapon
 from .roles import DemoWeaponAssessor
 
 _ENV_OPERATOR_TYPE = "FLUX_GATE_OPERATOR_TYPE"
@@ -30,6 +30,16 @@ def _load_weapons(spec: str) -> list[Weapon]:
     return [Weapon(**yaml.safe_load(path.read_text()))]
 
 
+def _load_targets(spec: str) -> list[Target]:
+    """Return targets from a single YAML file or all *.yaml files in a directory."""
+    path = Path(spec)
+    if not path.exists():
+        return []
+    if path.is_dir():
+        return [Target(**yaml.safe_load(f.read_text())) for f in sorted(path.glob("*.yaml"))]
+    return [Target(**yaml.safe_load(path.read_text()))]
+
+
 @click.command(
     help=(
         "Adversarial inference engine for software correctness. "
@@ -44,6 +54,13 @@ def _load_weapons(spec: str) -> list[Weapon]:
     metavar="FILE_OR_DIR",
     show_default=True,
     help="Path to a Weapon YAML file, or a directory of YAML files (one weapon per file).",
+)
+@click.option(
+    "--target",
+    default=".flux_gate/targets",
+    metavar="FILE_OR_DIR",
+    show_default=True,
+    help="Path to a Target YAML file, or a directory of YAML files (one target per file).",
 )
 @click.option(
     "--actors",
@@ -66,7 +83,9 @@ def _load_weapons(spec: str) -> list[Weapon]:
     show_default=True,
     help="Stop after the first critical finding.",
 )
-def main(url: str, weapon: str, actors: str, threshold: float, fail_fast: bool) -> None:
+def main(
+    url: str, weapon: str, target: str, actors: str, threshold: float, fail_fast: bool
+) -> None:
     operator_type = os.environ.get(_ENV_OPERATOR_TYPE, "")
     operator_key = os.environ.get(_ENV_OPERATOR_KEY, "")
     adversary_type = os.environ.get(_ENV_ADVERSARY_TYPE, "")
@@ -96,6 +115,7 @@ def main(url: str, weapon: str, actors: str, threshold: float, fail_fast: bool) 
         sys.exit(1)
 
     weapons = _load_weapons(weapon)
+    targets = _load_targets(target)
 
     actor_headers: dict[str, dict[str, str]] = {}
     actors_path = Path(actors)
@@ -108,28 +128,30 @@ def main(url: str, weapon: str, actors: str, threshold: float, fail_fast: bool) 
 
     blocked = False
     for inv in weapons or [None]:  # type: ignore[list-item]
-        runner = FluxGateRunner(
-            executor=executor,
-            operator=operator,
-            adversary=adversary,
-            assessor=DemoWeaponAssessor() if inv else None,
-            weapon=inv,
-            gate_threshold=threshold,
-            fail_fast_tier=0 if fail_fast else None,
-        )
+        for tgt in targets or [None]:  # type: ignore[list-item]
+            runner = FluxGateRunner(
+                executor=executor,
+                operator=operator,
+                adversary=adversary,
+                assessor=DemoWeaponAssessor() if inv else None,
+                weapon=inv,
+                target=tgt,
+                gate_threshold=threshold,
+                fail_fast_tier=0 if fail_fast else None,
+            )
 
-        try:
-            run = runner.run()
-        except Exception as exc:  # noqa: BLE001
-            click.echo(f"error: {exc}", err=True)
-            sys.exit(1)
+            try:
+                run = runner.run()
+            except Exception as exc:  # noqa: BLE001
+                click.echo(f"error: {exc}", err=True)
+                sys.exit(1)
 
-        click.echo(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
+            click.echo(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
 
-        gate = run.risk_report.merge_gate
-        if gate and gate.recommendation == "block":
-            click.echo(f"gate: BLOCKED — {gate.rationale}", err=True)
-            blocked = True
+            gate = run.risk_report.merge_gate
+            if gate and gate.recommendation == "block":
+                click.echo(f"gate: BLOCKED — {gate.rationale}", err=True)
+                blocked = True
 
     if blocked:
         sys.exit(1)
