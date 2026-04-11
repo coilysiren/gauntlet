@@ -102,13 +102,13 @@ class Weapon(FluxGateModel):
     """Engineer-authored weapon that drives the adversarial loop.
 
     ``description`` is given to the Operator to guide probe scenario generation.
-    ``must_hold`` are given only to the HoldoutVitals — the Operator
+    ``blockers`` are given only to the HoldoutVitals — the Operator
     never receives them, preserving the train/test separation.
     """
 
     title: str
     description: str
-    must_hold: list[str]
+    blockers: list[str]
     target_endpoints: list[str] = Field(default_factory=list)
 
 

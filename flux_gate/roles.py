@@ -203,7 +203,7 @@ class DemoNaturalLanguageHoldoutVitals:
                 actors=["userA", "userB"],
                 verdict=criterion,
             )
-            for i, criterion in enumerate(weapon.must_hold)
+            for i, criterion in enumerate(weapon.blockers)
         ]
 
 
@@ -272,7 +272,7 @@ class DemoWeaponAssessor:
         suggestions: list[str] = []
         score = 1.0
 
-        for criterion in weapon.must_hold:
+        for criterion in weapon.blockers:
             if len(criterion.strip()) < self._MIN_CRITERION_LEN:
                 issues.append(
                     f"Property too vague (< {self._MIN_CRITERION_LEN} chars): {criterion!r}"
@@ -287,7 +287,7 @@ class DemoWeaponAssessor:
             suggestions.append("List the endpoints the weapon covers (e.g. 'PATCH /tasks/{id}').")
             score -= 0.2
 
-        has_status_code = any(self._STATUS_CODE_RE.search(c) for c in weapon.must_hold)
+        has_status_code = any(self._STATUS_CODE_RE.search(c) for c in weapon.blockers)
         if not has_status_code:
             suggestions.append(
                 "Consider adding expected HTTP status codes to must_hold properties."

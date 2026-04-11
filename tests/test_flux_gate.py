@@ -49,7 +49,7 @@ def test_nl_holdout_gate_blocks_failing_api() -> None:
     inv = Weapon(
         title="Users cannot modify each other's tasks",
         description="The task API must enforce resource ownership.",
-        must_hold=["A PATCH by a non-owner is rejected with 403"],
+        blockers=["A PATCH by a non-owner is rejected with 403"],
         target_endpoints=["PATCH /tasks/{id}"],
     )
 
@@ -76,7 +76,7 @@ def test_holdout_gate_blocks_failing_api() -> None:
     inv = Weapon(
         title="Users cannot modify each other's tasks",
         description="The task API must enforce resource ownership.",
-        must_hold=["A PATCH by a non-owner is rejected with 403"],
+        blockers=["A PATCH by a non-owner is rejected with 403"],
         target_endpoints=["PATCH /tasks/{id}"],
     )
 
@@ -123,7 +123,7 @@ def test_preflight_blocks_vague_weapon() -> None:
     vague = Weapon(
         title="Make it secure",
         description="It should be secure.",
-        must_hold=["secure", "no bugs"],  # both under 20 chars
+        blockers=["secure", "no bugs"],  # both under 20 chars
         target_endpoints=[],
     )
 
@@ -150,7 +150,7 @@ def test_preflight_passes_good_weapon() -> None:
     good = Weapon(
         title="Users cannot modify each other's tasks",
         description="The task API must enforce resource ownership.",
-        must_hold=["A PATCH by a non-owner is rejected with 403"],
+        blockers=["A PATCH by a non-owner is rejected with 403"],
         target_endpoints=["PATCH /tasks/{id}"],
     )
 

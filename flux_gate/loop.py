@@ -97,8 +97,8 @@ class FluxGateRunner:
                 return self._blocked_by_preflight(weapon_assessment)
 
         # Inject weapon into each iteration so the Operator can read
-        # spec.weapon.description — but never must_hold, which
-        # is only passed to the holdout vitals below.
+        # spec.weapon.description — but never blockers, which
+        # are only passed to the holdout vitals below.
         if self._weapon:
             specs = [s.model_copy(update={"weapon": self._weapon}) for s in specs]
 
