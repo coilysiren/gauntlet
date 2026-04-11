@@ -14,6 +14,10 @@ Commit directly to `main` without asking for confirmation, including `git add`. 
 
 Commit whenever a unit of work feels sufficiently complete — after fixing a bug, adding a feature, passing tests, or reaching any other natural stopping point. Don't wait for the user to ask.
 
+## Before every commit
+
+Sync `docs/architecture.md` with the current module structure in `flux_gate/`. Check for new files, removed files, new classes/protocols, and changed abstractions.
+
 ## Rules
 
 After any code change:

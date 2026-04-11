@@ -23,12 +23,25 @@ if TYPE_CHECKING:
 
 
 class Operator(Protocol):
+    """Generates test scenarios for one iteration of the adversarial loop.
+
+    Receives the current iteration's goal and all prior findings. The demo
+    implementation always returns the same cross-user modification scenario;
+    a real implementation (see ``LLMOperator``) calls an LLM.
+    """
+
     def generate_scenarios(
         self, spec: IterationSpec, previous_iterations: list[IterationRecord]
     ) -> list[Scenario]: ...
 
 
 class Adversary(Protocol):
+    """Analyzes execution results and returns security/logic findings.
+
+    The demo implementation surfaces the authorization flaw whenever any
+    assertion fails; a real implementation (see ``LLMAdversary``) calls an LLM.
+    """
+
     def analyze(
         self, spec: IterationSpec, execution_results: list[ExecutionResult]
     ) -> list[Finding]: ...
