@@ -6,6 +6,7 @@ Developer reference for agents and humans working on this codebase.
 
 - [Architecture](docs/architecture.md) — module map, key abstractions, data flow, design decisions
 - [Development](docs/development.md) — setup, tests, linting, Docker, CI
+- [Usage](docs/usage.md) — workflow runbook: when to run, how to integrate, how to act on results
 
 ## Git workflow
 
