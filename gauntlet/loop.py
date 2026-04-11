@@ -99,12 +99,14 @@ class GauntletRunner:
             if not weapon_assessment.proceed:
                 return self._blocked_by_preflight(weapon_assessment)
 
-        # Inject weapon and target into each iteration so the Attacker can read
-        # spec.weapon.description — but never blockers, which
-        # are only passed to the holdout vitals below.
+        # Inject a WeaponBrief (no blockers) into each iteration spec so the
+        # Attacker can read spec.weapon.description and spec.weapon.title.
+        # The full Weapon (with blockers) is held back and only passed to the
+        # holdout vitals below — this is the train/test boundary.
         if self._weapon:
+            weapon_brief = self._weapon.brief()
             specs = [
-                s.model_copy(update={"weapon": self._weapon, "target": self._target}) for s in specs
+                s.model_copy(update={"weapon": weapon_brief, "target": self._target}) for s in specs
             ]
 
         records: list[IterationRecord] = []

@@ -21,6 +21,7 @@ from .models import (
     Target,
     Weapon,
     WeaponAssessment,
+    WeaponBrief,
 )
 from .roles import (
     DemoAttacker,
@@ -66,6 +67,7 @@ __all__ = [
     "Target",
     "Weapon",
     "WeaponAssessment",
+    "WeaponBrief",
     "build_default_iteration_specs",
     "create_inspector",
     "create_attacker",

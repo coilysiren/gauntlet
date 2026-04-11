@@ -98,17 +98,37 @@ class Finding(GauntletModel):
     evidence: list[str] = Field(default_factory=list)
 
 
+class WeaponBrief(GauntletModel):
+    """Attacker-visible slice of a Weapon.
+
+    Contains only what the Attacker is allowed to see: the weapon title and a
+    plain-English description of the attack surface.  The acceptance criteria
+    (``blockers``) are intentionally absent — they are withheld to preserve the
+    train/test separation and prevent reward-hacking.
+    """
+
+    title: str
+    description: str
+
+
 class Weapon(GauntletModel):
     """Engineer-authored weapon that drives the adversarial loop.
 
-    ``description`` is given to the Attacker to guide probe plan generation.
-    ``blockers`` are given only to the HoldoutVitals — the Attacker
-    never receives them, preserving the train/test separation.
+    ``description`` (exposed via ``WeaponBrief``) is given to the Attacker to
+    guide probe plan generation.  ``blockers`` are given only to the
+    HoldoutVitals — the Attacker never receives them, preserving the
+    train/test separation.
+
+    Use ``Weapon.brief()`` to produce the attacker-safe view.
     """
 
     title: str
     description: str
     blockers: list[str]
+
+    def brief(self) -> WeaponBrief:
+        """Return the attacker-safe view of this weapon (no blockers)."""
+        return WeaponBrief(title=self.title, description=self.description)
 
 
 class WeaponAssessment(GauntletModel):
@@ -144,7 +164,7 @@ class IterationSpec(GauntletModel):
     attacker_prompt: str
     inspector_prompt: str
     tier: int = 0
-    weapon: Weapon | None = None
+    weapon: WeaponBrief | None = None
     target: Target | None = None
 
 
