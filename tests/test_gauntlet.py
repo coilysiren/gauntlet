@@ -7,7 +7,7 @@ from gauntlet import (
     DemoWeaponAssessor,
     Drone,
     GauntletRunner,
-    InMemoryTaskAPI,
+    InMemoryHttpApi,
     Target,
     Weapon,
 )
@@ -15,7 +15,7 @@ from gauntlet import (
 
 def test_runner_produces_four_iteration_report() -> None:
     runner = GauntletRunner(
-        executor=Drone(InMemoryTaskAPI()),
+        executor=Drone(InMemoryHttpApi()),
         attacker=DemoAttacker(),
         inspector=DemoInspector(),
     )
@@ -31,7 +31,7 @@ def test_runner_produces_four_iteration_report() -> None:
 
 def test_demo_plan_surfaces_authz_failure() -> None:
     runner = GauntletRunner(
-        executor=Drone(InMemoryTaskAPI()),
+        executor=Drone(InMemoryHttpApi()),
         attacker=DemoAttacker(),
         inspector=DemoInspector(),
     )
@@ -54,7 +54,7 @@ def test_nl_holdout_gate_blocks_failing_api() -> None:
     )
 
     runner = GauntletRunner(
-        executor=Drone(InMemoryTaskAPI()),
+        executor=Drone(InMemoryHttpApi()),
         attacker=DemoAttacker(),
         inspector=DemoInspector(),
         nl_holdout_vitals=DemoNaturalLanguageHoldoutVitals(),
@@ -80,7 +80,7 @@ def test_holdout_gate_blocks_failing_api() -> None:
     )
 
     runner = GauntletRunner(
-        executor=Drone(InMemoryTaskAPI()),
+        executor=Drone(InMemoryHttpApi()),
         attacker=DemoAttacker(),
         inspector=DemoInspector(),
         holdout_vitals=DemoHoldoutVitals(),
@@ -102,7 +102,7 @@ def test_holdout_gate_blocks_failing_api() -> None:
 def test_fail_fast_tier_stops_early_on_critical_finding() -> None:
     """fail_fast_tier=0 stops after the first iteration when a critical finding appears."""
     runner = GauntletRunner(
-        executor=Drone(InMemoryTaskAPI()),
+        executor=Drone(InMemoryHttpApi()),
         attacker=DemoAttacker(),
         inspector=DemoInspector(),
         fail_fast_tier=0,
@@ -126,7 +126,7 @@ def test_preflight_blocks_vague_weapon() -> None:
     )
 
     runner = GauntletRunner(
-        executor=Drone(InMemoryTaskAPI()),
+        executor=Drone(InMemoryHttpApi()),
         attacker=DemoAttacker(),
         inspector=DemoInspector(),
         assessor=DemoWeaponAssessor(),
@@ -153,7 +153,7 @@ def test_preflight_passes_good_weapon() -> None:
     target = Target(title="Task endpoints", endpoints=["PATCH /tasks/{id}"])
 
     runner = GauntletRunner(
-        executor=Drone(InMemoryTaskAPI()),
+        executor=Drone(InMemoryHttpApi()),
         attacker=DemoAttacker(),
         inspector=DemoInspector(),
         assessor=DemoWeaponAssessor(),
@@ -173,7 +173,7 @@ def test_run_records_target() -> None:
     """GauntletRun records the target passed to the runner."""
     target = Target(title="Task endpoints", endpoints=["POST /tasks", "PATCH /tasks/{id}"])
     runner = GauntletRunner(
-        executor=Drone(InMemoryTaskAPI()),
+        executor=Drone(InMemoryHttpApi()),
         attacker=DemoAttacker(),
         inspector=DemoInspector(),
         target=target,

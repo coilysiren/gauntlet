@@ -1,11 +1,5 @@
 # TODO
 
-Introduce an Adapter abstraction for execution surfaces. HTTP becomes one adapter, with CLI and WebDriver as next candidates. This decouples the adversarial loop from any single interface.
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above
-
 Internally generalize request/response into Action/Observation. The attacker produces actions, adapters execute them, and inspectors evaluate observations. This enables expansion without changing the mental model.
 
 ---

@@ -1,5 +1,6 @@
+from .adapters import Adapter, CliAdapter, HttpApi, InMemoryHttpApi, WebDriverAdapter
 from .auth import ApiKeyAuth, BearerAuth, UsersConfig, to_user_headers
-from .executor import Api, Drone, HttpExecutor, InMemoryTaskAPI
+from .executor import Drone
 from .llm import LLMAttacker, LLMInspector, create_attacker, create_inspector
 from .loop import GauntletRunner, build_default_iteration_specs
 from .models import (
@@ -34,17 +35,18 @@ from .roles import (
 from .store import PlanStore
 
 __all__ = [
-    "UsersConfig",
-    "Api",
+    "Adapter",
     "ApiKeyAuth",
     "Assertion",
     "AssertionResult",
     "BearerAuth",
-    "DemoInspector",
+    "CliAdapter",
+    "Clearance",
+    "DemoAttacker",
     "DemoHoldoutVitals",
+    "DemoInspector",
     "DemoNaturalLanguageHoldoutVitals",
     "DemoNaturalLanguageVitals",
-    "DemoAttacker",
     "DemoWeaponAssessor",
     "Drone",
     "ExecutionResult",
@@ -52,26 +54,27 @@ __all__ = [
     "Finding",
     "GauntletRun",
     "GauntletRunner",
-    "HttpExecutor",
+    "HttpApi",
     "HttpRequest",
     "HttpResponse",
-    "InMemoryTaskAPI",
+    "InMemoryHttpApi",
     "IterationRecord",
     "IterationSpec",
-    "LLMInspector",
     "LLMAttacker",
-    "Clearance",
+    "LLMInspector",
     "NaturalLanguagePlan",
-    "RiskReport",
     "Plan",
     "PlanStep",
+    "PlanStore",
+    "RiskReport",
     "Target",
+    "UsersConfig",
     "Weapon",
     "WeaponAssessment",
     "WeaponBrief",
+    "WebDriverAdapter",
     "build_default_iteration_specs",
-    "PlanStore",
-    "create_inspector",
     "create_attacker",
+    "create_inspector",
     "to_user_headers",
 ]

@@ -7,8 +7,9 @@ from pathlib import Path
 import click
 import yaml
 
+from .adapters import HttpApi
 from .auth import UsersConfig, to_user_headers
-from .executor import Drone, HttpExecutor
+from .executor import Drone
 from .llm import create_attacker, create_inspector
 from .loop import GauntletRunner
 from .models import ExecutionResult, Target, Weapon
@@ -122,7 +123,7 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
 
     attacker = create_attacker(operator_type, operator_key)
     inspector = create_inspector(adversary_type, adversary_key)
-    executor = Drone(HttpExecutor(url, user_headers=user_headers))
+    executor = Drone(HttpApi(url, user_headers=user_headers))
 
     blocked = False
     for inv in weapons or [None]:  # type: ignore[list-item]
