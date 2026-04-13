@@ -86,12 +86,6 @@ Implement 5 core weapons: identity_swap, state_desync, temporal_replay, schema_m
 
 remove the section in TODO.md about this, then create a git commit the literal text above, be aware that I'm performing multiple agentic pull requests on this same codebase at the same time.
 
-Define weapon interface (inputs, mutation strategy, expected signals). Each weapon should take a baseline request and produce mutated variants plus evaluation criteria. This abstraction is what enables future extensibility.
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above, be aware that I'm performing multiple agentic pull requests on this same codebase at the same time.
-
 Map weapons to human-readable findings (clear, concise output). Translate low-level request/response differences into meaningful explanations. The output should read like a human describing a bug, not a diff dump.
 
 ---
