@@ -92,12 +92,6 @@ Standardize output format (e.g. ❌ issue / ⚠️ warning with explanation). Co
 
 remove the section in TODO.md about this, then create a git commit the literal text above, be aware that I'm performing multiple agentic pull requests on this same codebase at the same time.
 
-Generate realistic but deterministic findings for demo reliability. Even if internally heuristic-driven, the output should be stable across runs. Flaky demos will destroy trust quickly.
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above, be aware that I'm performing multiple agentic pull requests on this same codebase at the same time.
-
 Create a clean README with: hook, demo, quickstart, example output. The README is your primary conversion surface, not your code. Optimize it for scanning and immediate understanding.
 
 ---
