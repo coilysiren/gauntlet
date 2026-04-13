@@ -168,23 +168,21 @@ Supported authentication types:
 | `bearer` | `token_env` | `Authorization: Bearer <$token_env>` |
 | `api_key` | `header`, `key_env` | `<header>: <$key_env>` |
 
-## Core Model
+## How it works
 
-Gauntlet treats code change correctness as a problem of behavioral observation while under attack.
+Gauntlet is **automated adversarial thinking** for your API. Instead of scanning for known vulnerability signatures, it reasons about how your system *should* behave -- then systematically tries to make it misbehave.
 
-* Code is assumed to be untrusted, potentially written but a human - but designed to be written by a bot
-* Tests are generated dynamically
+* Code is assumed to be untrusted until proven otherwise
+* Tests are generated dynamically, not written in advance
 * Confidence emerges from what survives adversarial probing
 
 It asks: "How hard did we try to break this, and what happened when we did?"
 
-## The Two Roles
-
 ### The Attacker
 
-Explores the execution space
+Explores the execution space:
 
-* Constructs plausible, production-like plans
+* Constructs plausible, production-like scenarios
 * Simulates how the system will actually be used (and misused)
 * Explores workflows, edge cases, and state transitions
 * Adapts based on what has already been tested
@@ -193,38 +191,30 @@ The Attacker is not trying to prove correctness. It is trying to create situatio
 
 ### The Inspector
 
-Applies intelligent pressure
+Applies intelligent pressure:
 
 * Analyzes execution results for weaknesses
 * Identifies suspicious passes and untested assumptions
 * Forms hypotheses about hidden failure modes
-* Forces the next round of plans toward likely breakpoints
+* Forces the next round of attacks toward likely breakpoints
 
 The Inspector assumes "This system is broken. I just haven't proven it yet."
 
-### Dynamic Between Them
+### The loop
 
-* The Attacker explores
-* The Inspector sharpens
-* Execution grounds both
+The Attacker explores. The Inspector sharpens. Execution grounds both. Together, they perform a guided adversarial search over the space of possible failures.
 
-Together, they perform a form of guided adversarial search over the space of possible failures.
+## What makes this different
 
-## What Makes This Different
-
-Gauntlet is not:
-
-* a test runner
-* a code reviewer
-* a fuzzing tool
-
-It is an adversarial inference engine for software correctness.
+Gauntlet is not a security scanner, a test runner, or a fuzzer. Those tools check for *known* problems. Gauntlet reasons about *unknown* ones.
 
 It combines:
 
-* dynamic plan generation (like red teaming)
-* execution grounding (like CI)
-* adversarial refinement (like security testing)
+* dynamic scenario generation (like red teaming)
+* execution against a real system (like CI)
+* adversarial refinement (like penetration testing)
+
+The result is automated adversarial thinking -- the kind of creative, skeptical pressure that a good security engineer or QA lead would apply, running continuously against every change.
 
 ## Prior Art
 
