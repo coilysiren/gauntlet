@@ -86,12 +86,6 @@ Implement 5 core weapons: identity_swap, state_desync, temporal_replay, schema_m
 
 remove the section in TODO.md about this, then create a git commit the literal text above, be aware that I'm performing multiple agentic pull requests on this same codebase at the same time.
 
-Map weapons to human-readable findings (clear, concise output). Translate low-level request/response differences into meaningful explanations. The output should read like a human describing a bug, not a diff dump.
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above, be aware that I'm performing multiple agentic pull requests on this same codebase at the same time.
-
 Standardize output format (e.g. ❌ issue / ⚠️ warning with explanation). Consistency here improves readability and shareability. This format should be optimized for screenshots and copy-paste.
 
 ---
