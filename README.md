@@ -1,10 +1,8 @@
-# ⚡🔄🛂 Gauntlet
+# Gauntlet
 
-Gauntlet is a two-agent adversarial loop that infers software correctness by observing how code behaves under sustained, targeted attack. It's designed as quality control for a dark factory environment — where code is written by bots and verified by attack.
+**Find real vulnerabilities in your API using adversarial AI.**
 
-The name comes from "running the gauntlet": a challenge where you must survive a sustained barrage from all sides. Here, the Inspector drives the system under test through escalating tiers of adversarial pressure until hidden failure modes become detectable — then gates promotion on whether any signal came through.
-
-AI-written code can look correct — following conventions, passing linting, reading plausibly — while hiding behavioral failures that only surface under real use. Traditional tests don't catch this because the same agent that wrote the code also wrote the tests, sharing the same blind spots. Gauntlet is built for this: the Inspector assumes the code is broken and generates plans the code author never considered, and the `blockers` in each Weapon are never shown to the Attacker, preserving a real train/test split that prevents the agent from inadvertently writing code that passes by knowing what the tests check.
+Gauntlet uses two AI agents in an adversarial loop to find bugs that traditional testing misses. One agent attacks your API with escalating, production-realistic scenarios. The other watches for failures, sharpens the next round of attacks, and decides whether the system is safe to ship.
 
 > An **Attacker** uses a **Weapon** aimed at a **Target** to generate **Plans**. A **Drone** executes those Plans as a **User**. An **Inspector** watches and surfaces **Findings**. Hidden **Vitals** — externally observable truths about expected system behavior — are checked independently to produce a **Clearance**.
 
