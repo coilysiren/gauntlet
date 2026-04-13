@@ -13,6 +13,7 @@ from .executor import Drone
 from .llm import create_attacker, create_inspector
 from .loop import GauntletRunner
 from .models import Arsenal, ExecutionResult, Finding, GauntletRun, Target, Weapon
+from .openapi import parse_openapi
 from .roles import DemoWeaponAssessor
 
 _ENV_ATTACKER_TYPE = "GAUNTLET_ATTACKER_TYPE"
@@ -92,6 +93,12 @@ def _load_targets(spec: str) -> list[Target]:
     help="Holdout satisfaction score required to recommend merge.",
 )
 @click.option(
+    "--openapi",
+    default=None,
+    metavar="FILE",
+    help="Path to an OpenAPI 3.x YAML/JSON spec.  Auto-generates Target objects from the spec.",
+)
+@click.option(
     "--fail-fast/--no-fail-fast",
     default=True,
     show_default=True,
@@ -104,6 +111,7 @@ def main(
     target: str,
     users: str,
     threshold: float,
+    openapi: str | None,
     fail_fast: bool,
 ) -> None:
     operator_type = os.environ.get(_ENV_ATTACKER_TYPE, "")
@@ -140,6 +148,9 @@ def main(
     else:
         weapons = _load_weapons(weapon)
     targets = _load_targets(target)
+
+    if openapi:
+        targets = parse_openapi(openapi) + targets
 
     user_headers: dict[str, dict[str, str]] = {}
     users_path = Path(users)

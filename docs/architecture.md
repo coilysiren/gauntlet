@@ -8,6 +8,7 @@ gauntlet/
 │                #   includes Action/Observation (surface-agnostic wrappers
 │                #   around HttpRequest/HttpResponse and future action types)
 ├── auth.py      # user authentication config (BearerAuth, ApiKeyAuth, UsersConfig)
+├── openapi.py   # OpenAPI 3.x spec parser — turns a YAML/JSON spec into Target objects
 ├── roles.py     # Attacker, Inspector, HoldoutVitals, WeaponAssessor protocols + demo impls
 ├── adapters/    # Adapter protocol + concrete implementations
 │   ├── __init__.py   # Adapter protocol (send + execute)
@@ -27,6 +28,7 @@ Nothing imports from `loop.py` or `cli.py` except `__init__.py`. Dependency orde
 ```
 models  ←  auth
 models  ←  adapters (http, cli, webdriver, __init__)
+models  ←  openapi
 models  ←  roles
 models + adapters  ←  executor
 models + roles + executor  ←  loop
@@ -34,6 +36,7 @@ models  ←  executor
 models  ←  store
 models + roles + executor + store  ←  loop
 models + auth + roles + executor + llm + loop  ←  cli
+models + auth + openapi + roles + executor + llm + loop  ←  cli
 ```
 
 ## Data flow

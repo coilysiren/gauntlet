@@ -27,6 +27,7 @@ from .models import (
     WeaponAssessment,
     WeaponBrief,
 )
+from .openapi import parse_openapi
 from .roles import (
     DemoAttacker,
     DemoHoldoutVitals,
@@ -73,6 +74,7 @@ __all__ = [
     "Plan",
     "PlanStep",
     "PlanStore",
+    "parse_openapi",
     "RiskReport",
     "Target",
     "UsersConfig",
