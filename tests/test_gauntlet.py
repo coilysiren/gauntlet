@@ -7,6 +7,7 @@ from gauntlet import (
     DemoWeaponAssessor,
     Drone,
     GauntletRunner,
+    HttpRequest,
     InMemoryHttpApi,
     Target,
     Weapon,
@@ -180,3 +181,95 @@ def test_run_records_target() -> None:
     )
     run = runner.run()
     assert run.target == target
+
+
+# ---------------------------------------------------------------------------
+# Deterministic flaw detection tests
+# ---------------------------------------------------------------------------
+
+
+def test_flaw_validation_accepts_invalid_title_type() -> None:
+    """POST /tasks accepts a non-string title (e.g. integer) without error.
+
+    A correct API should reject non-string titles with 422.  The seeded flaw
+    silently coerces the value, so the response is 201.
+    """
+    api = InMemoryHttpApi()
+    resp = api.send(
+        "userA",
+        HttpRequest(method="POST", path="/tasks", body={"title": 12345}),
+    )
+    assert resp.status_code == 201
+    # The flaw: title is stored as-is (an int) rather than being rejected.
+    assert resp.body["title"] == 12345
+    assert not isinstance(resp.body["title"], str)
+
+
+def test_flaw_validation_accepts_missing_title() -> None:
+    """POST /tasks succeeds even when the required 'title' field is omitted.
+
+    A correct API should reject the request with 422.  The seeded flaw
+    defaults to an empty string.
+    """
+    api = InMemoryHttpApi()
+    resp = api.send(
+        "userA",
+        HttpRequest(method="POST", path="/tasks", body={}),
+    )
+    assert resp.status_code == 201
+    assert resp.body["title"] == ""
+
+
+def test_flaw_list_endpoint_leaks_across_users() -> None:
+    """GET /tasks returns tasks belonging to ALL users, not just the requester.
+
+    A correct API should filter the list to only the requesting user's tasks.
+    The seeded flaw returns every task regardless of ownership.
+    """
+    api = InMemoryHttpApi()
+
+    # userA creates a task
+    api.send(
+        "userA",
+        HttpRequest(method="POST", path="/tasks", body={"title": "secret A"}),
+    )
+    # userB creates a task
+    api.send(
+        "userB",
+        HttpRequest(method="POST", path="/tasks", body={"title": "secret B"}),
+    )
+
+    # userA lists tasks — should only see their own, but the flaw leaks all.
+    resp = api.send("userA", HttpRequest(method="GET", path="/tasks"))
+    assert resp.status_code == 200
+    tasks = resp.body["tasks"]
+    owners = {t["owner"] for t in tasks}
+    # The flaw: userA sees userB's task.
+    assert "userB" in owners
+    assert len(tasks) == 2
+
+
+def test_flaw_patch_without_ownership_check() -> None:
+    """PATCH /tasks/{id} allows any user to modify another user's task.
+
+    This is the original seeded flaw. A correct API should return 403.
+    """
+    api = InMemoryHttpApi()
+    resp = api.send(
+        "userA",
+        HttpRequest(method="POST", path="/tasks", body={"title": "owned by A"}),
+    )
+    task_id = resp.body["id"]
+
+    # userB patches userA's task — should be 403 but the flaw allows 200.
+    patch_resp = api.send(
+        "userB",
+        HttpRequest(
+            method="PATCH",
+            path=f"/tasks/{task_id}",
+            body={"title": "hijacked"},
+        ),
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.body["title"] == "hijacked"
+    assert patch_resp.body["last_modified_by"] == "userB"
