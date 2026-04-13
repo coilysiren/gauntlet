@@ -15,6 +15,7 @@ gauntlet/
 │   ├── cli.py        # CliAdapter (stub)
 │   └── webdriver.py  # WebDriverAdapter (stub)
 ├── executor.py  # Drone — runs plans via Adapter.execute(Action) → Observation
+├── executor.py  # Api protocol + HttpExecutor + InMemoryHttpApi + Drone
 ├── llm.py       # LLMAttacker and LLMInspector backed by OpenAI or Anthropic
 ├── loop.py      # GauntletRunner orchestration + risk report assembly
 ├── store.py     # PlanStore and FindingsStore — disk-backed knowledge indexed by weapon ID
@@ -79,7 +80,7 @@ The system is split into a **deterministic core** and **non-deterministic edges*
 
 **Deterministic (no LLM, no network):**
 
-- `InMemoryTaskAPI` — in-memory REST API; pure dict operations, always same output for same input. Ships with the library as a working example SUT.
+- `InMemoryHttpApi` — in-memory REST API with three deterministic seeded flaws: (1) PATCH without ownership check, (2) POST accepts invalid data types for title and missing required fields, (3) GET /tasks list endpoint leaks all tasks regardless of ownership. Pure dict operations, always same output for same input. Ships with the library as a working example SUT.
 - `Drone` — resolves path templates, calls the SUT, evaluates assertions. Pure Python.
 - Assertion evaluation and risk report assembly — branching logic, set unions, averages, threshold arithmetic. Fully reproducible.
 - `Demo*` classes — hardcoded or regex-based implementations of each Protocol. Shipped with the library so users can run the full loop without API keys.
