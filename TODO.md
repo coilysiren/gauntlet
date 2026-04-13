@@ -36,12 +36,6 @@ Move `pytest` to development dependencies. It should not be required at runtime 
 
 remove the section in TODO.md about this, then create a git commit the literal text above
 
-Show attack progression metrics in output. Include number of iterations, plans generated, and successful escalations. This helps users understand how deeply the system probed.
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above
-
 Surface “unexpected behavior” even when no blockers are violated. This captures valuable signal that might not yet map to a formal weapon. It supports future weapon creation and refinement.
 
 ---

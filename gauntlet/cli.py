@@ -146,6 +146,7 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
                 sys.exit(1)
 
             _print_one_line_summary(run)
+            _print_progression_metrics(run)
 
             clearance = run.clearance
             if clearance:
@@ -204,6 +205,25 @@ def _dominant_method(run: GauntletRun) -> str:
     if not methods:
         return ""
     return max(set(methods), key=methods.count)
+
+
+def _print_progression_metrics(run: GauntletRun) -> None:
+    """Print attack progression metrics showing how deeply the system probed."""
+    iterations_run = len(run.iterations)
+    total_plans = sum(len(record.plans) for record in run.iterations)
+    total_findings = sum(len(record.findings) for record in run.iterations)
+    escalations = sum(
+        1
+        for record in run.iterations
+        for finding in record.findings
+        if finding.severity in ("high", "critical")
+    )
+    click.echo(
+        f"--- PROGRESSION: {iterations_run} iterations | "
+        f"{total_plans} plans | "
+        f"{total_findings} findings | "
+        f"{escalations} escalations ---"
+    )
 
 
 def _print_holdout_summary(holdout_results: list[ExecutionResult]) -> None:
