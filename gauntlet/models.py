@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
@@ -203,7 +203,7 @@ class Weapon(GauntletModel):
     Use ``Weapon.brief()`` to produce the attacker-safe view.
     """
 
-    _SNAKE_CASE_RE: re.Pattern[str] = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+    _SNAKE_CASE_RE: ClassVar[re.Pattern[str]] = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
 
     id: str | None = None
     title: str
