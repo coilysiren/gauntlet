@@ -17,6 +17,7 @@ gauntlet/
 ├── executor.py  # Drone — runs plans via Adapter.execute(Action) → Observation
 ├── llm.py       # LLMAttacker and LLMInspector backed by OpenAI or Anthropic
 ├── loop.py      # GauntletRunner orchestration + risk report assembly
+├── store.py     # PlanStore and FindingsStore — disk-backed knowledge indexed by weapon ID
 └── cli.py       # Click entry point — reads env vars, loads config, runs GauntletRunner
 ```
 
@@ -28,6 +29,9 @@ models  ←  adapters (http, cli, webdriver, __init__)
 models  ←  roles
 models + adapters  ←  executor
 models + roles + executor  ←  loop
+models  ←  executor
+models  ←  store
+models + roles + executor + store  ←  loop
 models + auth + roles + executor + llm + loop  ←  cli
 ```
 
@@ -115,3 +119,9 @@ Adapters implement both ``send`` (HTTP shorthand) and ``execute``
 **Why LLM providers are configurable per-role?** The Attacker and Inspector
 can use different providers (e.g., GPT-4 vs Claude) so users can mix strengths
 or reduce cost.
+
+**Why Arsenals?** An Arsenal is a named collection of Weapons. It replaces the
+earlier "policy packs" concept with vocabulary that fits the existing metaphor.
+Users load an arsenal via ``--arsenal path/to/arsenal.yaml`` to run the full set
+of weapons it contains. The CLI falls back to ``--weapon`` for individual
+weapon files when no arsenal is specified.

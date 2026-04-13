@@ -1,12 +1,10 @@
 # TODO
 
-Use weapons as the primary index for knowledge accumulation. Attach all findings, successful attacks, and surprising behaviors to weapon IDs. This avoids premature taxonomy while still enabling reuse.
 
 ---
 
 remove the section in TODO.md about this, then create a git commit the literal text above
 
-Group weapons under the concept of an “Arsenal.” This aligns with the existing metaphor and feels more natural than “policy packs.” Example: “Run Gauntlet with the default authz arsenal.”
 
 ---
 
@@ -25,12 +23,6 @@ Show attack progression metrics in output. Include number of iterations, plans g
 remove the section in TODO.md about this, then create a git commit the literal text above
 
 Surface “unexpected behavior” even when no blockers are violated. This captures valuable signal that might not yet map to a formal weapon. It supports future weapon creation and refinement.
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above
-
-Enforce naming discipline for long-term knowledge accumulation. Stable weapon IDs and consistent blocker phrasing matter more than adding new schema fields. Without this, accumulated data will fragment and lose value.
 
 ---
 

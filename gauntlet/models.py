@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
 
 
 class GauntletModel(BaseModel):
@@ -160,6 +161,7 @@ class Finding(GauntletModel):
     severity: Literal["low", "medium", "high", "critical"]
     confidence: float = Field(ge=0.0, le=1.0)
     rationale: str
+    weapon_id: str | None = None
     next_targets: list[str] = Field(default_factory=list)
     evidence: list[EvidenceItem] = Field(default_factory=list)
     reproduction_steps: list[str] = Field(default_factory=list)
@@ -200,14 +202,42 @@ class Weapon(GauntletModel):
     Use ``Weapon.brief()`` to produce the attacker-safe view.
     """
 
+    _SNAKE_CASE_RE: re.Pattern[str] = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
+
     id: str | None = None
     title: str
     description: str
     blockers: list[str]
 
+    @field_validator("id")
+    @classmethod
+    def _validate_id(cls, value: str | None) -> str | None:
+        if value is not None and not cls._SNAKE_CASE_RE.match(value):
+            raise ValueError(
+                f"Weapon id must be non-empty snake_case "
+                f"(e.g. 'resource_ownership_write_isolation'), got {value!r}"
+            )
+        return value
+
     def brief(self) -> WeaponBrief:
         """Return the attacker-safe view of this weapon (no blockers)."""
         return WeaponBrief(id=self.id, title=self.title, description=self.description)
+
+
+class Arsenal(GauntletModel):
+    """A named collection of Weapons.
+
+    Arsenals group related weapons under a single label so users can
+    select an entire attack surface with one flag.  Example::
+
+        gauntlet http://localhost:8000 --arsenal .gauntlet/arsenals/authz.yaml
+
+    An arsenal YAML file contains a ``name`` and a ``weapons`` list.
+    """
+
+    name: str
+    description: str = ""
+    weapons: list[Weapon]
 
 
 class WeaponAssessment(GauntletModel):

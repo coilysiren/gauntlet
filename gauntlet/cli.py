@@ -12,7 +12,7 @@ from .auth import UsersConfig, to_user_headers
 from .executor import Drone
 from .llm import create_attacker, create_inspector
 from .loop import GauntletRunner
-from .models import ExecutionResult, Target, Weapon
+from .models import Arsenal, ExecutionResult, Target, Weapon
 from .roles import DemoWeaponAssessor
 
 _ENV_ATTACKER_TYPE = "GAUNTLET_ATTACKER_TYPE"
@@ -29,6 +29,13 @@ def _load_weapons(spec: str) -> list[Weapon]:
     if path.is_dir():
         return [Weapon(**yaml.safe_load(f.read_text())) for f in sorted(path.glob("*.yaml"))]
     return [Weapon(**yaml.safe_load(path.read_text()))]
+
+
+def _load_arsenal(spec: str) -> Arsenal:
+    """Return an Arsenal from a single YAML file."""
+    path = Path(spec)
+    data = yaml.safe_load(path.read_text())
+    return Arsenal(**data)
 
 
 def _load_targets(spec: str) -> list[Target]:
@@ -49,6 +56,12 @@ def _load_targets(spec: str) -> list[Target]:
     )
 )
 @click.argument("url")
+@click.option(
+    "--arsenal",
+    default=None,
+    metavar="FILE",
+    help="Path to an Arsenal YAML file (a named collection of weapons).",
+)
 @click.option(
     "--weapon",
     default=".gauntlet/weapons",
@@ -84,7 +97,15 @@ def _load_targets(spec: str) -> list[Target]:
     show_default=True,
     help="Stop after the first critical finding.",
 )
-def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_fast: bool) -> None:
+def main(
+    url: str,
+    arsenal: str | None,
+    weapon: str,
+    target: str,
+    users: str,
+    threshold: float,
+    fail_fast: bool,
+) -> None:
     operator_type = os.environ.get(_ENV_ATTACKER_TYPE, "")
     operator_key = os.environ.get(_ENV_ATTACKER_KEY, "")
     adversary_type = os.environ.get(_ENV_INSPECTOR_TYPE, "")
@@ -113,7 +134,11 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
         )
         sys.exit(1)
 
-    weapons = _load_weapons(weapon)
+    if arsenal:
+        loaded_arsenal = _load_arsenal(arsenal)
+        weapons = loaded_arsenal.weapons
+    else:
+        weapons = _load_weapons(weapon)
     targets = _load_targets(target)
 
     user_headers: dict[str, dict[str, str]] = {}

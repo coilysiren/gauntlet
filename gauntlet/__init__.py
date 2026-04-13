@@ -5,6 +5,7 @@ from .llm import LLMAttacker, LLMInspector, create_attacker, create_inspector
 from .loop import GauntletRunner, build_default_iteration_specs
 from .models import (
     Action,
+    Arsenal,
     Assertion,
     AssertionResult,
     Clearance,
@@ -34,12 +35,13 @@ from .roles import (
     DemoNaturalLanguageVitals,
     DemoWeaponAssessor,
 )
-from .store import PlanStore
+from .store import FindingsStore, PlanStore
 
 __all__ = [
     "Action",
     "Adapter",
     "ApiKeyAuth",
+    "Arsenal",
     "Assertion",
     "AssertionResult",
     "BearerAuth",
@@ -55,6 +57,7 @@ __all__ = [
     "ExecutionResult",
     "ExecutionStepResult",
     "Finding",
+    "FindingsStore",
     "GauntletRun",
     "GauntletRunner",
     "HttpApi",
