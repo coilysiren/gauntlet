@@ -1,11 +1,5 @@
 # TODO
 
-Internally generalize request/response into Action/Observation. The attacker produces actions, adapters execute them, and inspectors evaluate observations. This enables expansion without changing the mental model.
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above
-
 Keep the 4-iteration ladder but explicitly define its intent. Label them as baseline, boundary, adversarial misuse, and targeted escalation. This improves interpretability without changing behavior.
 
 ---
