@@ -48,12 +48,6 @@ Surface “unexpected behavior” even when no blockers are violated. This captu
 
 remove the section in TODO.md about this, then create a git commit the literal text above
 
-Enforce naming discipline for long-term knowledge accumulation. Stable weapon IDs and consistent blocker phrasing matter more than adding new schema fields. Without this, accumulated data will fragment and lose value.
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above
-
 ---
 
 - installation should assume we aren't testing against a python project
