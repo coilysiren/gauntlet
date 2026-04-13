@@ -29,7 +29,7 @@ flaw — expect `risk_level: critical`.
 ## Running the full arsenal locally
 
 ```bash
-uv run python scripts/run_arsenal.py
+./scripts/run_arsenal.py
 ```
 
 Runs every weapon in `.gauntlet/weapons/` (including the OWASP set) against the

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv run python
 """Run every weapon in the arsenal against the demo API.
 
 No LLM keys required — uses the deterministic Demo* classes.
@@ -8,7 +8,7 @@ The demo API (InMemoryHttpApi) has three seeded flaws:
   3. GET /tasks leaks all users' tasks regardless of requester
 
 Usage:
-    uv run python scripts/run_arsenal.py
+    ./scripts/run_arsenal.py
 """
 
 from __future__ import annotations
