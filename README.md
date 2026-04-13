@@ -228,7 +228,7 @@ It combines:
 
 ## Prior Art
 
-These projects occupy the same space — adversarial testing of running services — and informed Gauntlet's design.
+These projects occupy the same space — adversarial testing of running services.
 
 ### [RESTler](https://github.com/microsoft/restler-fuzzer)
 
