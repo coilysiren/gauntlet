@@ -100,3 +100,9 @@ secret-handling logic and makes the boundary clear.
 **Why LLM providers are configurable per-role?** The Attacker and Inspector
 can use different providers (e.g., GPT-4 vs Claude) so users can mix strengths
 or reduce cost.
+
+**Why Arsenals?** An Arsenal is a named collection of Weapons. It replaces the
+earlier "policy packs" concept with vocabulary that fits the existing metaphor.
+Users load an arsenal via ``--arsenal path/to/arsenal.yaml`` to run the full set
+of weapons it contains. The CLI falls back to ``--weapon`` for individual
+weapon files when no arsenal is specified.

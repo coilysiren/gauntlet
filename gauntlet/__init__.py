@@ -4,6 +4,7 @@ from .executor import Drone
 from .llm import LLMAttacker, LLMInspector, create_attacker, create_inspector
 from .loop import GauntletRunner, build_default_iteration_specs
 from .models import (
+    Arsenal,
     Assertion,
     AssertionResult,
     Clearance,
@@ -37,6 +38,7 @@ from .store import FindingsStore, PlanStore
 __all__ = [
     "Adapter",
     "ApiKeyAuth",
+    "Arsenal",
     "Assertion",
     "AssertionResult",
     "BearerAuth",

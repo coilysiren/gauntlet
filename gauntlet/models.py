@@ -182,6 +182,22 @@ class Weapon(GauntletModel):
         return WeaponBrief(id=self.id, title=self.title, description=self.description)
 
 
+class Arsenal(GauntletModel):
+    """A named collection of Weapons.
+
+    Arsenals group related weapons under a single label so users can
+    select an entire attack surface with one flag.  Example::
+
+        gauntlet http://localhost:8000 --arsenal .gauntlet/arsenals/authz.yaml
+
+    An arsenal YAML file contains a ``name`` and a ``weapons`` list.
+    """
+
+    name: str
+    description: str = ""
+    weapons: list[Weapon]
+
+
 class WeaponAssessment(GauntletModel):
     """Result of a preflight quality check on a Weapon.
 

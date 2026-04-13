@@ -12,12 +12,6 @@ Keep the 4-iteration ladder but explicitly define its intent. Label them as base
 
 remove the section in TODO.md about this, then create a git commit the literal text above
 
-Group weapons under the concept of an “Arsenal.” This aligns with the existing metaphor and feels more natural than “policy packs.” Example: “Run Gauntlet with the default authz arsenal.”
-
----
-
-remove the section in TODO.md about this, then create a git commit the literal text above
-
 Lower the Python version requirement to the oldest supported version. This reduces friction for adoption, especially in CI environments. Only require newer versions if strictly necessary.
 
 ---
