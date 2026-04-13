@@ -147,6 +147,7 @@ def main(url: str, weapon: str, target: str, users: str, threshold: float, fail_
 
             _print_one_line_summary(run)
             _print_progression_metrics(run)
+            _print_findings_formatted(run)
 
             clearance = run.clearance
             if clearance:
@@ -236,3 +237,13 @@ def _print_holdout_summary(holdout_results: list[ExecutionResult]) -> None:
         f"    {total} acceptance criteria evaluated against unseen holdout vitals\n"
         f"    (withheld from attacker — independent verification)"
     )
+
+
+def _print_findings_formatted(run: GauntletRun) -> None:
+    """Print findings with standardized emoji indicators."""
+    for record in run.iterations:
+        for finding in record.findings:
+            if finding.severity in ("critical", "high"):
+                click.echo(f"\u274c {finding.issue} [{finding.severity}]")
+            else:
+                click.echo(f"\u26a0\ufe0f {finding.issue} [{finding.severity}]")
