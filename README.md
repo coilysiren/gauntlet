@@ -54,14 +54,17 @@ Using different providers for each role is intentional — model diversity reduc
 ### CLI
 
 ```
-gauntlet <url> [--weapon FILE_OR_DIR] [--target FILE_OR_DIR] [--users FILE] [--threshold N] [--no-fail-fast]
+gauntlet [url] [--config FILE] [--arsenal FILE] [--weapon FILE_OR_DIR] [--target FILE_OR_DIR] [--openapi FILE] [--users FILE] [--threshold N] [--no-fail-fast]
 ```
 
 | Argument | Default | Description |
 |---|---|---|
-| `url` | required | Base URL of the running API |
+| `url` | from config or required | Base URL of the running API |
+| `--config` | `.gauntlet/config.yaml` | Path to a YAML config file; CLI flags override config values |
+| `--arsenal` | none | Path to an Arsenal YAML file (a named collection of weapons) |
 | `--weapon` | `.gauntlet/weapons` | Path to a [Weapon YAML](#weapons) file, or a directory of YAML files (one weapon per file) |
 | `--target` | `.gauntlet/targets` | Path to a [Target YAML](#targets) file, or a directory of YAML files (one target per file) |
+| `--openapi` | none | Path to an OpenAPI 3.x YAML/JSON spec; auto-generates Target objects |
 | `--users` | `.gauntlet/users.yaml` | Path to an [users YAML](#user-authentication) file |
 | `--threshold` | `0.90` | Holdout satisfaction score required to recommend merge |
 | `--fail-fast` / `--no-fail-fast` | enabled | Stop at the first critical finding; use `--no-fail-fast` to run all iterations |
@@ -69,8 +72,9 @@ gauntlet <url> [--weapon FILE_OR_DIR] [--target FILE_OR_DIR] [--users FILE] [--t
 ```bash
 gauntlet http://localhost:8000
 gauntlet http://localhost:8000 --no-fail-fast
-gauntlet http://localhost:8000 --weapon /path/to/weapons/ --target /path/to/targets/ --users /path/to/users.yaml
-gauntlet http://localhost:8000 --weapon /path/to/single_weapon.yaml --target /path/to/single_target.yaml
+gauntlet http://localhost:8000 --openapi openapi.yaml
+gauntlet http://localhost:8000 --arsenal .gauntlet/arsenal.yaml
+gauntlet --config .gauntlet/config.yaml
 ```
 
 Output is YAML:
@@ -224,28 +228,28 @@ It combines:
 
 ## Prior Art
 
-These projects informed Gauntlet's design.
+These projects occupy the same space — adversarial testing of running services — and informed Gauntlet's design.
 
-### [StrongDM Software Factory](https://factory.strongdm.ai/)
+### [RESTler](https://github.com/microsoft/restler-fuzzer)
 
-Production dark factory — code is written and reviewed entirely by agents.
+Stateful REST API fuzzer from Microsoft Research. RESTler generates and executes sequences of HTTP requests against a live service, inferring producer-consumer dependencies between endpoints from the OpenAPI spec to explore deep service states.
 
-Key architectural ideas adopted: **satisfaction metrics** (probabilistic 0–1 scores, not boolean pass/fail) and the principle that **plans live outside the codebase** to prevent reward-hacking (Gauntlet uses `.gauntlet/spec.yaml`).
+Shared ground: attacks a **running HTTP server** with **multi-step request sequences**, finds bugs that only manifest through specific request orderings, and checks for both security and reliability failures.
 
-Architectural divergence: the Software Factory maintains a Digital Twin Universe — behavioral clones of third-party services that agents test against without hitting real infrastructure. Gauntlet has no twin layer; it requires a running HTTP server and sends real requests. The Software Factory is also a full code-generation pipeline; Gauntlet is only a verifier. It verifies code already written, it does not write code.
+Architectural divergence: RESTler uses grammar-based fuzzing derived from the OpenAPI spec, not LLM reasoning. Validation is hardcoded checkers (status codes, schema conformance), not an Inspector that reasons about what looks suspicious. There is no train/test split — all validation rules are visible to the generation logic. Output is boolean pass/fail per sequence, not a probabilistic confidence score.
 
-### [OctopusGarden](https://github.com/foundatron/octopusgarden)
+### [Schemathesis](https://github.com/schemathesis/schemathesis)
 
-Open-source autonomous development platform with a convergence-based loop.
+Property-based API testing built on the Hypothesis framework. Generates thousands of test cases from OpenAPI/GraphQL schemas and executes them against a live API to find crashes, schema violations, and stateful workflow bugs.
 
-Key architectural ideas adopted: **stratified plan difficulty** (Gauntlet's four tiers: baseline → boundary → adversarial → targeted) and the **attractor loop** concept — iterating until a threshold is met (Gauntlet's `--threshold` flag).
+Shared ground: tests a **live running API**, supports **stateful multi-step workflows** where earlier requests create resources consumed by later ones, and is deliberately **adversarial** — generating edge cases, boundary conditions, and invalid inputs to break the API.
 
-Architectural divergence: OctopusGarden's loop is dynamic — it runs until satisfaction converges, with stall recovery via high-temperature "wonder" phases and model escalation (cheap model first, premium model after non-improving iterations). Gauntlet's loop is fixed-depth: four tiers, one pass. There is no stall detection, no wonder phase, and no model escalation. The tradeoff is predictability and cost over adaptive thoroughness.
+Architectural divergence: generation is algorithmic (property-based testing), not LLM-driven. There is no Attacker/Inspector separation — generation and validation are unified. No hidden blockers or train/test split. Results are deterministic pass/fail, not probabilistic confidence.
 
-### [Fabro](https://github.com/fabro-sh/fabro)
+### [ToolFuzz](https://github.com/eth-sri/ToolFuzz)
 
-Open-source dark factory orchestrator with a graph-based workflow engine.
+LLM-powered fuzzer from ETH Zurich that generates natural-language test prompts and executes them against LLM agent tools, detecting both runtime crashes and semantic correctness failures.
 
-Key architectural ideas adopted: **human-in-the-loop gates** — Fabro's hexagon gates are checkpoints where a human can block promotion. Gauntlet's `Clearance` plays the same role, but the decision is made by the Inspector LLM rather than a human.
+Shared ground: **uses LLMs to generate adversarial inputs** and has **separate generation and evaluation phases** — prompts are generated, executed against the target, and then an LLM judges whether outputs are semantically correct. This is the closest architectural parallel to the Attacker/Drone/Inspector pipeline.
 
-Architectural divergence: Fabro models workflows as directed graphs (Graphviz DOT files, version-controlled alongside code). Gauntlet has no graph engine — its pipeline is a fixed linear sequence of iterations. Fabro also supports multi-model routing via CSS-like stylesheets and per-stage Git checkpointing. Gauntlet has neither: model assignment is static (one Attacker, one Inspector) and there is no checkpointing between iterations.
+Architectural divergence: targets LLM agent tools (LangChain, Composio) rather than arbitrary HTTP APIs. No hidden blockers or train/test split — the evaluator sees all context. Attacks are individual prompts, not multi-step chained API call sequences. No probabilistic confidence scoring.

@@ -16,7 +16,6 @@ gauntlet/
 │   ├── cli.py        # CliAdapter (stub)
 │   └── webdriver.py  # WebDriverAdapter (stub)
 ├── executor.py  # Drone — runs plans via Adapter.execute(Action) → Observation
-├── executor.py  # Api protocol + HttpExecutor + InMemoryHttpApi + Drone
 ├── llm.py       # LLMAttacker and LLMInspector backed by OpenAI or Anthropic
 ├── loop.py      # GauntletRunner orchestration + risk report assembly
 ├── store.py     # PlanStore and FindingsStore — disk-backed knowledge indexed by weapon ID
@@ -30,12 +29,9 @@ models  ←  auth
 models  ←  adapters (http, cli, webdriver, __init__)
 models  ←  openapi
 models  ←  roles
-models + adapters  ←  executor
-models + roles + executor  ←  loop
-models  ←  executor
 models  ←  store
+models + adapters  ←  executor
 models + roles + executor + store  ←  loop
-models + auth + roles + executor + llm + loop  ←  cli
 models + auth + openapi + roles + executor + llm + loop  ←  cli
 ```
 

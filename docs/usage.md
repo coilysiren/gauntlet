@@ -102,6 +102,40 @@ gauntlet --threshold 0.50
 
 If both a config file and a positional URL are provided, the positional URL takes precedence.
 
+## Arsenals
+
+An Arsenal is a named collection of weapons bundled in a single YAML file. Use `--arsenal` instead of `--weapon` to load all weapons from one file:
+
+```yaml
+# .gauntlet/authz_arsenal.yaml
+name: authz
+description: Authorization and ownership enforcement weapons
+weapons:
+  - id: identity_swap
+    title: Users cannot access or modify each other's resources
+    description: >
+      The API must enforce resource ownership at every endpoint.
+    blockers:
+      - A write request by a non-owner is rejected with 403 or 404
+      - A read request by a non-owner returns 403 or 404
+```
+
+```bash
+gauntlet http://localhost:8000 --arsenal .gauntlet/authz_arsenal.yaml
+```
+
+When `--arsenal` is provided, it takes precedence over `--weapon`.
+
+## OpenAPI-driven targets
+
+If your API has an OpenAPI 3.x spec, use `--openapi` to auto-generate Target objects from the spec instead of writing them by hand:
+
+```bash
+gauntlet http://localhost:8000 --openapi openapi.yaml
+```
+
+Targets parsed from the spec are combined with any manually-defined targets from `--target`. This is useful for broad coverage without maintaining a separate target file for every endpoint.
+
 ## Run Gauntlet
 
 ### CI pipeline

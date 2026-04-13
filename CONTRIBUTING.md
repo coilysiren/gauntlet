@@ -15,10 +15,10 @@ uv run pre-commit install
 
 A weapon is a YAML file that defines an attack strategy. No Python code is required.
 
-1. Create a new YAML file in `.gauntlet/guards/` (or wherever your project keeps weapons):
+1. Create a new YAML file in `.gauntlet/weapons/` (or wherever your project keeps weapons):
 
 ```yaml
-# .gauntlet/guards/my_new_weapon.yaml
+# .gauntlet/weapons/my_new_weapon.yaml
 id: my_snake_case_weapon_id
 title: Short human-readable title
 description: >
@@ -29,9 +29,6 @@ blockers:
   - A concrete, externally observable assertion (e.g. "A DELETE by a non-owner is rejected with 403")
   - Another assertion the system must satisfy
   - Include expected HTTP status codes when possible
-target_endpoints:
-  - POST /resources
-  - DELETE /resources/{id}
 ```
 
 2. The fields map to the `Weapon` model in `gauntlet/models.py`:
@@ -48,34 +45,38 @@ target_endpoints:
 4. Test your weapon by running the full loop against a live API:
 
 ```bash
-gauntlet http://localhost:8000 --weapon .gauntlet/guards/my_new_weapon.yaml
+gauntlet http://localhost:8000 --weapon .gauntlet/weapons/my_new_weapon.yaml --target .gauntlet/targets/
 ```
 
 ## How to add a new adapter
 
-Adapters are execution surfaces that translate `HttpRequest`/`HttpResponse` into real interactions. The existing adapters are HTTP (`gauntlet/adapters/http.py`), CLI (`gauntlet/adapters/cli.py`), and WebDriver (`gauntlet/adapters/webdriver.py`).
+Adapters are execution surfaces that translate `Action`/`Observation` (or `HttpRequest`/`HttpResponse`) into real interactions. The existing adapters are HTTP (`gauntlet/adapters/http.py`), CLI (`gauntlet/adapters/cli.py`), and WebDriver (`gauntlet/adapters/webdriver.py`).
 
 To add a new adapter, implement the `Adapter` protocol defined in `gauntlet/adapters/__init__.py`:
 
 ```python
-from gauntlet.adapters import Adapter
-from gauntlet.models import HttpRequest, HttpResponse
+from gauntlet.models import Action, HttpRequest, HttpResponse, Observation
 
 
 class MyAdapter:
     """Implements the Adapter protocol."""
 
     def send(self, user: str, request: HttpRequest) -> HttpResponse:
-        # Translate the request into your execution surface,
-        # execute it, and return an HttpResponse.
+        # HTTP-specific entry point.
         ...
+
+    def execute(self, user: str, action: Action) -> Observation:
+        # Surface-agnostic entry point — the Drone calls this.
+        response = self.send(user, action.to_http_request())
+        return Observation.from_http_response(response)
 ```
 
-The protocol requires a single method:
+The protocol requires two methods:
 
 ```python
 class Adapter(Protocol):
     def send(self, user: str, request: HttpRequest) -> HttpResponse: ...
+    def execute(self, user: str, action: Action) -> Observation: ...
 ```
 
 Place your adapter module in `gauntlet/adapters/` and re-export it from `gauntlet/adapters/__init__.py` by adding it to the imports and `__all__` list.
@@ -122,8 +123,8 @@ All code must pass `ruff check` and `ruff format --check` with no errors. Type a
 
 | Extension point | What to create | Interface / schema |
 |---|---|---|
-| New weapon | YAML file in `.gauntlet/guards/` | `id`, `title`, `description`, `blockers` fields |
-| New adapter | Python module in `gauntlet/adapters/` | `Adapter` protocol: `send(user, request) -> HttpResponse` |
+| New weapon | YAML file in `.gauntlet/weapons/` | `id`, `title`, `description`, `blockers` fields |
+| New adapter | Python module in `gauntlet/adapters/` | `Adapter` protocol: `send()` + `execute()` |
 | New attacker | Python class anywhere | `Attacker` protocol: `generate_plans(spec, previous_iterations) -> list[Plan]` |
 | New inspector | Python class anywhere | `Inspector` protocol: `analyze(spec, execution_results) -> list[Finding]` |
 | New holdout vitals | Python class anywhere | `HoldoutVitals` protocol: `acceptance_plans(weapon) -> list[Plan]` |
