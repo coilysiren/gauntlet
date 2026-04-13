@@ -6,6 +6,7 @@
 gauntlet/
 ├── models.py    # all Pydantic data models — the shared vocabulary
 ├── auth.py      # user authentication config (BearerAuth, ApiKeyAuth, UsersConfig)
+├── openapi.py   # OpenAPI 3.x spec parser — turns a YAML/JSON spec into Target objects
 ├── roles.py     # Attacker, Inspector, HoldoutVitals, WeaponAssessor protocols + demo impls
 ├── executor.py  # Api protocol + HttpExecutor + InMemoryTaskAPI + Drone
 ├── llm.py       # LLMAttacker and LLMInspector backed by OpenAI or Anthropic
@@ -17,10 +18,11 @@ Nothing imports from `loop.py` or `cli.py` except `__init__.py`. Dependency orde
 
 ```
 models  ←  auth
+models  ←  openapi
 models  ←  roles
 models  ←  executor
 models + roles + executor  ←  loop
-models + auth + roles + executor + llm + loop  ←  cli
+models + auth + openapi + roles + executor + llm + loop  ←  cli
 ```
 
 ## Data flow
