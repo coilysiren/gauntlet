@@ -10,14 +10,16 @@ Gauntlet does not call any LLM itself and requires no Anthropic/OpenAI credentia
 
 ```
 gauntlet/
-├── models.py    # Pydantic data models - the shared vocabulary with the host
-│                #   (HoldoutResult wraps an ExecutionResult with the blocker
-│                #   it tested)
-├── http.py      # HttpApi — real HTTP requests via `requests`
-├── executor.py  # Drone - runs plans by calling HttpApi.send per step
-├── loop.py      # build_risk_report + aggregate_final_clearance helpers
-├── runs.py      # RunStore - per-run iteration + holdout buffer (filesystem)
-└── server.py    # FastMCP server exposing the gauntlet tools
+├── models.py         # Pydantic data models - the shared vocabulary with the
+│                     #   host (HoldoutResult wraps an ExecutionResult with
+│                     #   the blocker it tested)
+├── http.py           # HttpApi — real HTTP requests via `requests`
+├── executor.py       # Drone - runs plans by calling HttpApi.send per step
+├── loop.py           # build_risk_report + aggregate_final_clearance helpers
+├── runs.py           # RunStore - per-run iteration + holdout buffer (fs)
+├── _log.py           # Private. JSON stderr logging + log_tool_call
+├── _plausibility.py  # Private. Heuristic holdout-plan plausibility checks
+└── server.py         # FastMCP server exposing the gauntlet tools
 ```
 
 Dependency order:
@@ -27,7 +29,8 @@ models  ←  http
 models  ←  runs
 models + http  ←  executor
 models  ←  loop
-models + executor + loop + http + runs  ←  server
+models  ←  _plausibility
+_log + _plausibility + models + executor + loop + http + runs  ←  server
 ```
 
 Nothing imports from `server.py`. The MCP entry point (`main()` in `server.py`) runs `FastMCP.run()` which speaks stdio to the Claude Code process that launched it.
@@ -57,7 +60,7 @@ The skills are pure prose (no executable code); they encode role discipline that
 | `start_run(weapon_ids)` | `{run_id}` | creates `.gauntlet/runs/<run_id>/` |
 | `record_iteration(run_id, weapon_id, iteration_record)` | `{status: ok}` | appends one `IterationRecord` to the buffer |
 | `read_iteration_records(run_id, weapon_id)` | `list[IterationRecord]` | reads from the buffer |
-| `record_holdout_result(run_id, weapon_id, holdout_result)` | `{status: ok}` | appends one `HoldoutResult` to the buffer |
+| `record_holdout_result(run_id, weapon_id, holdout_result)` | `{status: ok, warnings: [...]}` | appends one `HoldoutResult` to the buffer; runs heuristic plausibility checks against the blocker |
 | `read_holdout_results(run_id, weapon_id)` | `list[HoldoutResult]` | reads from the buffer |
 | `assemble_run_report(run_id, weapon_id, threshold)` | `dict` with `risk_report` + `clearance` | reads from the buffer |
 | `assemble_final_clearance(run_id, clearance_threshold, weapon_ids?)` | `FinalClearance` | reads every per-weapon report from the buffer and aggregates |
@@ -70,7 +73,15 @@ with two append-only JSONL files: `iterations.jsonl` (one `IterationRecord`
 per line) and `holdouts.jsonl` (one `HoldoutResult` per line). `record_*`
 calls append; `read_*` calls read the whole file. JSONL is chosen so that
 multiple subagent processes — possibly fronted by separate Claude Code
-sessions — can append concurrently without coordinating on a lock.
+sessions — can append concurrently. On POSIX, each append takes an
+`fcntl.flock` to serialize writers and prevent byte interleaving.
+
+On read, corrupt JSONL lines are skipped with a logged warning and tallied
+in `RunStore.corrupt_record_counts()`; the host can surface the counts if
+it cares about partial buffers. The manifest carries a `schema_version`
+field (current value: `gauntlet.runs.SCHEMA_VERSION`) so future layout
+changes have something to key off; readers tolerate old buffers that
+predate the field.
 
 The buffer is short-lived: one run, one host session. Nothing depends on
 state surviving across runs. If a run crashes, restart from `start_run`.
