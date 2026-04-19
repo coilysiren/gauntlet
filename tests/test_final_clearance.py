@@ -9,13 +9,13 @@ from gauntlet import (
     HoldoutResult,
     HttpRequest,
     IterationRecord,
+    IterationSpec,
     Plan,
     PlanStep,
     RiskReport,
     RunStore,
     WeaponReport,
     aggregate_final_clearance,
-    build_default_iteration_specs,
 )
 from gauntlet.server import (
     assemble_final_clearance,
@@ -25,6 +25,17 @@ from gauntlet.server import (
 )
 
 from ._factories import make_execution_result
+
+
+def _spec(name: str = "baseline") -> IterationSpec:
+    return IterationSpec(
+        index=1,
+        name=name,
+        goal=name,
+        attacker_prompt="",
+        inspector_prompt="",
+    )
+
 
 # ---------------------------------------------------------------------------
 # Direct aggregator (loop-level)
@@ -174,7 +185,7 @@ _AUTHZ_PLAN = Plan(
 def _seed_weapon(store: RunStore, run_id: str, weapon_id: str) -> None:
     execution = make_execution_result(plan_name=_AUTHZ_PLAN.name)
     record = IterationRecord(
-        spec=build_default_iteration_specs()[0],
+        spec=_spec(),
         plans=[_AUTHZ_PLAN],
         execution_results=[execution],
         findings=[],

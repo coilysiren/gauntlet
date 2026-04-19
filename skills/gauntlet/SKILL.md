@@ -14,7 +14,7 @@ Gauntlet's novelty is the train/test split: each Weapon has a `description` (the
 | Role | Where it runs | MCP tools it can call |
 |---|---|---|
 | **Orchestrator** | This skill (you) | every Gauntlet tool |
-| **Attacker** | `gauntlet-attacker` subagent | `list_weapons`, `list_targets`, `execute_plan`, `default_iteration_specs`, `read_iteration_records`, `record_iteration` |
+| **Attacker** | `gauntlet-attacker` subagent | `list_weapons`, `execute_plan`, `read_iteration_records`, `record_iteration` |
 | **Inspector** | `gauntlet-inspector` subagent | `read_iteration_records`, `record_iteration` |
 | **HoldoutEvaluator** | `gauntlet-holdout-evaluator` subagent | `get_weapon`, `execute_plan`, `record_holdout_result` |
 
@@ -31,11 +31,10 @@ The Attacker and Inspector subagents cannot call `get_weapon` even if their prom
 
 ### Step 1 — Orchestrator: pick weapons and start the run
 
-1. `list_weapons(weapons_path, arsenal_path)` → pick one (or several) by `id`. If the user named a weapon, use it. If not, present the list and ask.
-2. `list_targets(targets_path, openapi_path)` → pick a matching target per weapon (optional; a weapon can run without one).
-3. `assess_weapon(weapon_id, target)` for each → if `proceed=False`, print the issues and skip that weapon. Don't try to fix the weapon yourself.
-4. `default_iteration_specs()` → the reference 4-stage ladder (baseline → boundary → adversarial_misuse → targeted_escalation). Use verbatim unless the user has said otherwise.
-5. `start_run(weapon_ids=[...])` → `{run_id}`. Carry `run_id` through every subsequent dispatch.
+1. `list_weapons(weapons_path)` → pick one (or several) by `id`. If the user named a weapon, use it. If not, present the list and ask.
+2. `start_run(weapon_ids=[...])` → `{run_id}`. Carry `run_id` through every subsequent dispatch.
+
+LUCA's iteration ladder is fixed at 4 stages: `baseline` → `boundary` → `adversarial_misuse` → `targeted_escalation`. Build the `IterationSpec` list inline; there is no MCP tool to fetch it.
 
 ### Step 2 — For each weapon, iterate the train side (typically 4 iterations)
 
@@ -105,7 +104,5 @@ That is kernel-level enforcement of the split, not a stylistic recommendation.
 Some prompts want a summary, not a full run:
 
 - "What weapons are available?" → `list_weapons()` and format the briefs. No iteration, no run buffer.
-- "Is this weapon well-formed?" → `assess_weapon(id, target)` and show the result.
-- "What's the default iteration ladder?" → `default_iteration_specs()`.
 
 Don't launch the full loop unless the user clearly wants a run.

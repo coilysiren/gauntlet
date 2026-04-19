@@ -17,9 +17,7 @@ AGENTS_DIR = Path(__file__).resolve().parents[1] / "agents"
 
 ATTACKER_ALLOW = {
     "mcp__gauntlet__list_weapons",
-    "mcp__gauntlet__list_targets",
     "mcp__gauntlet__execute_plan",
-    "mcp__gauntlet__default_iteration_specs",
     "mcp__gauntlet__read_iteration_records",
     "mcp__gauntlet__record_iteration",
 }

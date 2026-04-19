@@ -14,7 +14,6 @@ from gauntlet import (
     Plan,
     PlanStep,
     RunStore,
-    build_default_iteration_specs,
 )
 from gauntlet.server import (
     assemble_run_report,
@@ -58,6 +57,16 @@ _AUTHZ_PLAN = Plan(
 )
 
 
+def _spec(name: str = "baseline") -> IterationSpec:
+    return IterationSpec(
+        index=1,
+        name=name,
+        goal=name,
+        attacker_prompt="",
+        inspector_prompt="",
+    )
+
+
 def _make_iteration(spec: IterationSpec) -> IterationRecord:
     execution = make_execution_result(plan_name=_AUTHZ_PLAN.name)
     return IterationRecord(
@@ -85,7 +94,7 @@ def test_start_run_returns_unique_ids(tmp_path: Path) -> None:
 def test_record_and_read_iteration_round_trip(tmp_path: Path) -> None:
     store = RunStore(tmp_path)
     run_id = store.start_run(["weapon_a"])
-    record = _make_iteration(build_default_iteration_specs()[0])
+    record = _make_iteration(_spec())
 
     store.record_iteration(run_id, "weapon_a", record)
     store.record_iteration(run_id, "weapon_a", record)
@@ -113,7 +122,7 @@ def test_record_iteration_rejects_findings_with_violated_blocker(tmp_path: Path)
         violated_blocker="A PATCH by a non-owner is rejected with 403",
     )
     record = IterationRecord(
-        spec=build_default_iteration_specs()[0],
+        spec=_spec(),
         plans=[],
         execution_results=[],
         findings=[leaky_finding],
@@ -151,7 +160,7 @@ def test_record_holdout_result_mismatched_weapon_id_raises(tmp_path: Path) -> No
 def test_runstore_rejects_invalid_weapon_ids(tmp_path: Path) -> None:
     store = RunStore(tmp_path)
     run_id = store.start_run(["weapon_a"])
-    record = _make_iteration(build_default_iteration_specs()[0])
+    record = _make_iteration(_spec())
     for bad in ["", "../escape", "a/b", ".", ".."]:
         with pytest.raises(ValueError):
             store.record_iteration(run_id, bad, record)
@@ -159,7 +168,7 @@ def test_runstore_rejects_invalid_weapon_ids(tmp_path: Path) -> None:
 
 def test_runstore_rejects_invalid_run_id(tmp_path: Path) -> None:
     store = RunStore(tmp_path)
-    record = _make_iteration(build_default_iteration_specs()[0])
+    record = _make_iteration(_spec())
     with pytest.raises(ValueError):
         store.record_iteration("../escape", "weapon_a", record)
 
@@ -190,7 +199,7 @@ def test_start_run_tool_returns_run_id(tmp_path: Path) -> None:
 def test_iteration_buffer_tools_round_trip(tmp_path: Path) -> None:
     out = start_run(weapon_ids=["weapon_a"], runs_path=str(tmp_path))
     run_id = out["run_id"]
-    record = _make_iteration(build_default_iteration_specs()[0])
+    record = _make_iteration(_spec())
 
     record_iteration(
         run_id=run_id,
@@ -223,7 +232,7 @@ def test_holdout_buffer_tools_round_trip(tmp_path: Path) -> None:
 def test_assemble_run_report_buffer_mode(tmp_path: Path) -> None:
     out = start_run(weapon_ids=["weapon_a"], runs_path=str(tmp_path))
     run_id = out["run_id"]
-    record = _make_iteration(build_default_iteration_specs()[0])
+    record = _make_iteration(_spec())
     record_iteration(
         run_id=run_id,
         weapon_id="weapon_a",
@@ -246,8 +255,3 @@ def test_assemble_run_report_buffer_mode(tmp_path: Path) -> None:
     )
     assert out["clearance"] is not None
     assert out["clearance"]["recommendation"] == "block"
-
-
-def test_assemble_run_report_requires_arguments() -> None:
-    with pytest.raises(ValueError, match="requires either"):
-        assemble_run_report()

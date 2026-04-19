@@ -8,53 +8,9 @@ from .models import (
     FinalClearance,
     Finding,
     IterationRecord,
-    IterationSpec,
     RiskReport,
     WeaponReport,
 )
-
-
-def build_default_iteration_specs() -> list[IterationSpec]:
-    """Return the default 4-stage escalation ladder.
-
-    baseline → boundary → adversarial_misuse → targeted_escalation. Exposed
-    as a reference for hosts driving the adversarial loop; they may follow
-    it verbatim or author their own spec list.
-    """
-    return [
-        IterationSpec(
-            index=1,
-            name="baseline",
-            goal="baseline",
-            tier=0,
-            attacker_prompt="Generate diverse CRUD and lifecycle plans.",
-            inspector_prompt="Identify anomalies and weak coverage.",
-        ),
-        IterationSpec(
-            index=2,
-            name="boundary",
-            goal="boundary",
-            tier=1,
-            attacker_prompt="Target edge cases, missing fields, and schema drift.",
-            inspector_prompt="Escalate guard violations.",
-        ),
-        IterationSpec(
-            index=3,
-            name="adversarial_misuse",
-            goal="adversarial_misuse",
-            tier=2,
-            attacker_prompt="Simulate auth violations and invalid transitions.",
-            inspector_prompt="Identify security and logic failures.",
-        ),
-        IterationSpec(
-            index=4,
-            name="targeted_escalation",
-            goal="targeted_escalation",
-            tier=3,
-            attacker_prompt="Focus only on suspicious areas.",
-            inspector_prompt="Finalize the failure model.",
-        ),
-    ]
 
 
 def build_risk_report(

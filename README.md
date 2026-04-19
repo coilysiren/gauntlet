@@ -45,19 +45,16 @@ Without the skill, a host could still call the MCP tools ad-hoc, but it would ha
 
 | Tool | Purpose | Allowed in role |
 |---|---|---|
-| `list_weapons(weapons_path, arsenal_path)` | List attacker-safe `WeaponBrief`s (no blockers) | Orchestrator, Attacker |
-| `get_weapon(weapon_id, ...)` | Return full weapon including blockers | Orchestrator, HoldoutEvaluator |
-| `list_targets(targets_path, openapi_path)` | List configured `Target` surfaces | Orchestrator, Attacker |
+| `list_weapons(weapons_path)` | List attacker-safe `WeaponBrief`s (no blockers) | Orchestrator, Attacker |
+| `get_weapon(weapon_id, weapons_path)` | Return full weapon including blockers | Orchestrator, HoldoutEvaluator |
 | `execute_plan(url, plan, users_path)` | Deterministically run a `Plan` against the SUT | Orchestrator, Attacker, HoldoutEvaluator |
-| `assess_weapon(weapon_id, target, ...)` | Preflight quality check on a weapon | Orchestrator |
 | `start_run(weapon_ids)` | Initialize a per-run iteration + holdout buffer; returns an opaque `run_id` | Orchestrator |
 | `record_iteration(run_id, weapon_id, iteration_record)` | Append an `IterationRecord` to the run buffer (rejects findings that carry blocker text) | Attacker, Inspector |
 | `read_iteration_records(run_id, weapon_id)` | Read prior `IterationRecord`s for one weapon in this run | Attacker, Inspector |
 | `record_holdout_result(run_id, weapon_id, holdout_result)` | Append a `HoldoutResult` to the run buffer | HoldoutEvaluator |
 | `read_holdout_results(run_id, weapon_id)` | Read prior `HoldoutResult`s for one weapon in this run | Orchestrator |
-| `assemble_run_report(run_id, weapon_id)` (or explicit lists) | Build per-weapon `RiskReport` + `Clearance` | Orchestrator |
+| `assemble_run_report(run_id, weapon_id)` | Build per-weapon `RiskReport` + `Clearance` | Orchestrator |
 | `assemble_final_clearance(run_id, clearance_threshold)` | Aggregate every per-weapon report in the run into one overall `FinalClearance` (pass / conditional / block) | Orchestrator, HoldoutEvaluator |
-| `default_iteration_specs()` | Return the reference 4-stage escalation ladder | Orchestrator |
 
 The train/test split is enforced at the permission layer via MCP-tool allowlists on each per-role subagent — see the [`agents/`](agents/) directory. The Attacker subagent literally cannot call `get_weapon`, the Inspector subagent cannot call `get_weapon` or read holdout results, and the HoldoutEvaluator subagent cannot read the iteration buffer.
 
@@ -71,8 +68,6 @@ your-project/
 │   ├── weapons/           # one YAML file per Weapon
 │   │   ├── task_ownership.yaml
 │   │   └── task_read_isolation.yaml
-│   ├── targets/           # one YAML file per Target
-│   │   └── task_endpoints.yaml
 │   └── users.yaml         # optional: per-user auth credentials
 └── ...
 ```
@@ -93,19 +88,6 @@ blockers:
   - A PATCH request by a non-owner is rejected with 403
   - The task body is unchanged after an unauthorized PATCH attempt
   - A GET by the owner after an unauthorized PATCH returns the original data
-```
-
-### Targets
-
-A Target defines the API surface a Weapon is tested against. One target per YAML file.
-
-```yaml
-# .gauntlet/targets/task_endpoints.yaml
-title: Task ownership endpoints
-endpoints:
-  - POST /tasks
-  - PATCH /tasks/{id}
-  - GET /tasks/{id}
 ```
 
 ### User authentication
@@ -130,26 +112,6 @@ Supported authentication types:
 |---|---|---|
 | `bearer` | `token_env` | `Authorization: Bearer <$token_env>` |
 | `api_key` | `header`, `key_env` | `<header>: <$key_env>` |
-
-### Arsenals
-
-An Arsenal is a named collection of weapons bundled in a single YAML file - useful for selecting an entire attack class (authorization, input validation, OWASP top-10) as a unit.
-
-```yaml
-# .gauntlet/authz_arsenal.yaml
-name: authz
-description: Authorization and ownership enforcement weapons
-weapons:
-  - id: identity_swap
-    title: Users cannot access or modify each other's resources
-    description: >
-      The API must enforce resource ownership at every endpoint.
-    blockers:
-      - A write request by a non-owner is rejected with 403 or 404
-      - A read request by a non-owner returns 403 or 404
-```
-
-Pass `arsenal_path` to `list_weapons` / `get_weapon` / `assess_weapon` to load from an arsenal file.
 
 ## Core Model
 

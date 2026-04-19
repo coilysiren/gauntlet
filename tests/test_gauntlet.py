@@ -7,25 +7,14 @@ import yaml
 
 from gauntlet import (
     Assertion,
-    DemoWeaponAssessor,
     HttpRequest,
     IterationRecord,
     IterationSpec,
     Plan,
     PlanStep,
-    Target,
-    Weapon,
-    build_default_iteration_specs,
     build_risk_report,
 )
-from gauntlet.server import (
-    assemble_run_report,
-    assess_weapon,
-    default_iteration_specs,
-    get_weapon,
-    list_targets,
-    list_weapons,
-)
+from gauntlet.server import get_weapon, list_weapons
 
 from ._factories import make_execution_result
 
@@ -57,6 +46,16 @@ _AUTHZ_PLAN = Plan(
 )
 
 
+def _spec(name: str = "baseline") -> IterationSpec:
+    return IterationSpec(
+        index=1,
+        name=name,
+        goal=name,
+        attacker_prompt="",
+        inspector_prompt="",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Risk-report assembly
 # ---------------------------------------------------------------------------
@@ -66,7 +65,7 @@ def test_build_risk_report_reflects_holdout_failure() -> None:
     """With zero-satisfaction holdout results and no findings, clearance blocks."""
     execution = make_execution_result(passing=False)
     iteration = IterationRecord(
-        spec=build_default_iteration_specs()[0],
+        spec=_spec(),
         plans=[_AUTHZ_PLAN],
         execution_results=[execution],
         findings=[],
@@ -82,41 +81,13 @@ def test_build_risk_report_reflects_holdout_failure() -> None:
 
 def test_build_risk_report_no_holdout_yields_no_clearance() -> None:
     iteration = IterationRecord(
-        spec=build_default_iteration_specs()[0],
+        spec=_spec(),
         plans=[],
         execution_results=[],
         findings=[],
     )
     _, clearance = build_risk_report([iteration], [], clearance_threshold=0.9)
     assert clearance is None
-
-
-# ---------------------------------------------------------------------------
-# Weapon quality assessment
-# ---------------------------------------------------------------------------
-
-
-def test_weapon_assessor_rejects_vague_weapon() -> None:
-    vague = Weapon(
-        title="Make it secure",
-        description="It should be secure.",
-        blockers=["secure", "no bugs"],
-    )
-    assessment = DemoWeaponAssessor().assess(vague, None)
-    assert assessment.proceed is False
-    assert assessment.quality_score < 0.5
-
-
-def test_weapon_assessor_accepts_good_weapon() -> None:
-    good = Weapon(
-        title="Users cannot modify each other's tasks",
-        description="The task API must enforce resource ownership.",
-        blockers=["A PATCH by a non-owner is rejected with 403"],
-    )
-    target = Target(title="Task endpoints", endpoints=["PATCH /tasks/{id}"])
-    assessment = DemoWeaponAssessor().assess(good, target)
-    assert assessment.proceed is True
-    assert assessment.quality_score >= 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -164,67 +135,10 @@ def test_get_weapon_raises_on_unknown_id(weapons_dir: Path) -> None:
         get_weapon(weapon_id="nonexistent", weapons_path=str(weapons_dir))
 
 
-def test_list_targets_reads_yaml_dir(tmp_path: Path) -> None:
-    targets_dir = tmp_path / "targets"
-    targets_dir.mkdir()
-    (targets_dir / "task_endpoints.yaml").write_text(
-        yaml.dump(
-            {
-                "title": "Task endpoints",
-                "endpoints": ["POST /tasks", "PATCH /tasks/{id}"],
-            }
+def test_get_weapon_lookup_is_id_only(weapons_dir: Path) -> None:
+    """Lookup is id-only; the human-readable title is no longer accepted."""
+    with pytest.raises(ValueError, match="No weapon"):
+        get_weapon(
+            weapon_id="Users cannot modify each other's tasks",
+            weapons_path=str(weapons_dir),
         )
-    )
-    targets = list_targets(targets_path=str(targets_dir))
-    assert len(targets) == 1
-    assert targets[0].endpoints == ["POST /tasks", "PATCH /tasks/{id}"]
-
-
-def test_list_targets_returns_empty_when_missing(tmp_path: Path) -> None:
-    assert list_targets(targets_path=str(tmp_path / "does-not-exist")) == []
-
-
-def test_assess_weapon_via_mcp_surface(weapons_dir: Path) -> None:
-    assessment = assess_weapon(
-        weapon_id="resource_ownership_write_isolation",
-        weapons_path=str(weapons_dir),
-        target=Target(title="Task endpoints", endpoints=["PATCH /tasks/{id}"]),
-    )
-    assert assessment.proceed is True
-
-
-def test_default_iteration_specs_returns_four_stages() -> None:
-    specs = default_iteration_specs()
-    assert [s.name for s in specs] == [
-        "baseline",
-        "boundary",
-        "adversarial_misuse",
-        "targeted_escalation",
-    ]
-
-
-def test_assemble_run_report_shapes_output() -> None:
-    execution = make_execution_result(passing=False)
-    iteration = IterationRecord(
-        spec=IterationSpec(
-            index=1,
-            name="baseline",
-            goal="baseline",
-            attacker_prompt="",
-            inspector_prompt="",
-        ),
-        plans=[_AUTHZ_PLAN],
-        execution_results=[execution],
-        findings=[],
-    )
-
-    out = assemble_run_report(
-        iterations=[iteration],
-        holdout_results=[execution],
-        clearance_threshold=0.9,
-    )
-
-    assert "risk_report" in out
-    assert "clearance" in out
-    assert out["clearance"] is not None
-    assert out["clearance"]["recommendation"] == "block"

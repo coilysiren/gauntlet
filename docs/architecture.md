@@ -15,15 +15,12 @@ gauntlet/
 │                #   surface-agnostic execution; HoldoutResult wraps an
 │                #   ExecutionResult with the blocker it tested)
 ├── auth.py      # user authentication config (BearerAuth, ApiKeyAuth, UsersConfig)
-├── openapi.py   # OpenAPI 3.x spec parser - produces Target objects
-├── roles.py     # WeaponAssessor protocol + DemoWeaponAssessor
 ├── adapters/    # Adapter protocol + HttpApi (the only execution surface)
 │   ├── __init__.py   # Adapter protocol (send + execute)
 │   └── http.py       # HttpApi — real HTTP requests via `requests`
 ├── executor.py  # Drone - runs plans via Adapter.execute(Action) → Observation
-├── loop.py      # build_default_iteration_specs + build_risk_report helpers
+├── loop.py      # build_risk_report + aggregate_final_clearance helpers
 ├── runs.py      # RunStore - per-run iteration + holdout buffer (filesystem)
-├── store.py     # PlanStore and FindingsStore - disk-backed knowledge indexed by weapon ID
 └── server.py    # FastMCP server exposing the gauntlet tools
 ```
 
@@ -38,7 +35,7 @@ models  ←  store
 models  ←  runs
 models + adapters  ←  executor
 models  ←  loop
-models + auth + openapi + roles + executor + loop + adapters + runs  ←  server
+models + auth + executor + loop + adapters + runs  ←  server
 ```
 
 Nothing imports from `server.py`. The MCP entry point (`main()` in `server.py`) runs `FastMCP.run()` which speaks stdio to the Claude Code process that launched it.
@@ -62,19 +59,16 @@ The skills are pure prose (no executable code); they encode role discipline that
 
 | Tool | Returns | Side effect |
 |---|---|---|
-| `list_weapons(weapons_path, arsenal_path)` | `list[WeaponBrief]` (no blockers) | reads YAML from disk |
-| `get_weapon(weapon_id, ...)` | `Weapon` (with blockers) | reads YAML from disk |
-| `list_targets(targets_path, openapi_path)` | `list[Target]` | reads YAML / OpenAPI spec from disk |
+| `list_weapons(weapons_path)` | `list[WeaponBrief]` (no blockers) | reads YAML from disk |
+| `get_weapon(weapon_id, weapons_path)` | `Weapon` (with blockers) | reads YAML from disk |
 | `execute_plan(url, plan, users_path)` | `ExecutionResult` | sends real HTTP requests to the SUT |
-| `assess_weapon(weapon_id, target, ...)` | `WeaponAssessment` | reads YAML from disk |
 | `start_run(weapon_ids, runs_path)` | `{run_id}` | creates `runs_path/<run_id>/` |
 | `record_iteration(run_id, weapon_id, iteration_record, runs_path)` | `{status: ok}` | appends one `IterationRecord` to the buffer |
 | `read_iteration_records(run_id, weapon_id, runs_path)` | `list[IterationRecord]` | reads from the buffer |
 | `record_holdout_result(run_id, weapon_id, holdout_result, runs_path)` | `{status: ok}` | appends one `HoldoutResult` to the buffer |
 | `read_holdout_results(run_id, weapon_id, runs_path)` | `list[HoldoutResult]` | reads from the buffer |
-| `assemble_run_report(run_id, weapon_id, ... \| iterations, holdout_results, threshold)` | `dict` with `risk_report` + `clearance` | reads from the buffer (or accepts explicit lists) |
+| `assemble_run_report(run_id, weapon_id, threshold)` | `dict` with `risk_report` + `clearance` | reads from the buffer |
 | `assemble_final_clearance(run_id, clearance_threshold, weapon_ids?)` | `FinalClearance` | reads every per-weapon report from the buffer and aggregates |
-| `default_iteration_specs()` | `list[IterationSpec]` | none |
 
 ### Run-scoped buffer
 
@@ -116,12 +110,10 @@ The Orchestrator role (the host skill itself) retains every tool but is responsi
 (Orchestrator: host agent in a Claude Code session, runs the gauntlet skill)
 │
 ├── list_weapons() → pick weapons
-│   list_targets() → pick targets
-│   assess_weapon(id, target) → optional preflight
-│   default_iteration_specs() → reference ladder
 │   start_run(weapon_ids=[...]) → run_id
+│   build the inline 4-stage IterationSpec list
 │
-├── For each weapon, for each iteration spec (typically 4):
+├── For each weapon, for each iteration spec (4):
 │   ├── dispatch gauntlet-attacker subagent (run_id, weapon_id, spec, url)
 │   │     → composes plans, executes them, appends IterationRecord
 │   │
@@ -154,12 +146,10 @@ The host itself is non-deterministic (it's an LLM agent), but Gauntlet doesn't r
 
 **Why Pydantic?** All interchange objects are `BaseModel` subclasses with `extra="forbid"`. This catches schema drift early and makes JSON serialization/deserialization free - including over the MCP tool boundary.
 
-**Why Protocols instead of ABCs?** Structural subtyping lets callers pass any object that has the right methods without importing from `gauntlet`. Only `WeaponAssessor` remains as a protocol now that Attacker/Inspector are host-driven.
+**Why Protocols instead of ABCs?** Structural subtyping lets callers pass any object that has the right methods without importing from `gauntlet`. Only `Adapter` remains as a protocol now that Attacker/Inspector are host-driven.
 
 **Why separate auth.py?** User credentials involve secret resolution from env vars. Isolating this in `auth.py` keeps the rest of the codebase free of secret-handling logic.
 
-**Why Action/Observation instead of passing HttpRequest/HttpResponse directly?** The adversarial loop should not be coupled to a single execution surface. Action wraps an HttpRequest today and will wrap CLI commands or WebDriver interactions in the future; Observation wraps the corresponding response. The Drone converts between the two layers.
+**Why Action/Observation instead of passing HttpRequest/HttpResponse directly?** Carryover from when the adversarial loop was meant to span multiple surfaces (HTTP, CLI, WebDriver). With LUCA targeting HTTP-only, the wrapper is vestigial; a follow-up commit will inline it.
 
 **Why host-driven Attacker/Inspector?** Because Gauntlet runs inside Claude Code, the host already has an LLM ready to play both roles. Re-invoking a separate Anthropic or OpenAI client from Gauntlet's own process would require credentials Gauntlet doesn't have a clean way to acquire, and would duplicate reasoning capacity the host already provides.
-
-**Why Arsenals?** Individual weapons test one property at a time, which is the right granularity for authoring and debugging. An Arsenal groups related weapons under one YAML file so the host can select an entire attack class (authorization, input validation, OWASP top-10) as a unit.

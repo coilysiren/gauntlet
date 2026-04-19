@@ -74,48 +74,34 @@ blockers:
   - A DELETE request by a non-owner is rejected with 403 or 404
   - The resource body is unchanged after an unauthorized write attempt
   - A GET by the owner after a failed unauthorized write returns the original data
-inspired_by: spec.md#authorization
 ```
 
 Authoring rules:
 
-- `id` is snake_case and stable. The risk-report assembler keys findings by id; if you rename the id between runs, history breaks.
+- `id` is snake_case, required, and stable. The risk-report assembler keys findings by id; if you rename the id between runs, history breaks.
 - `title` is human-readable, sentence-case, no period at the end.
 - `description` is what the Attacker sees. It describes the **surface** and the **invariant** — not the acceptance criteria.
 - Each `blocker` is a single falsifiable statement with an expected status code where applicable. "Returns 403" is testable; "is secure" is not.
-- `inspired_by` is optional; use it to cite the spec section that drove this weapon. Helpful for review.
-- Do **not** invent endpoint paths. The Weapon is surface-agnostic; endpoints come from the host's `Target` (which it knows better than you do).
 - Do **not** include sample requests or expected responses in the YAML. That is the Attacker's job to compose at run time.
 
-### Step 4 — Preflight each Weapon
+Self-checks before saving each weapon:
 
-For each weapon you wrote, call `mcp__gauntlet__assess_weapon(weapon_id, target=None)`. The assessor is heuristic and lenient — `proceed=False` is a real signal something is off (vague blockers, missing status codes). If it fails, **do not silently fix** — surface the issues to the user with the specific weapon id. Common fixes:
+- A blocker shorter than ~20 chars is too vague; add the expected behaviour.
+- No HTTP status codes anywhere in the blockers usually means you're describing intent ("auth check happens") instead of behaviour ("returns 403").
 
-- A blocker shorter than 20 chars is too vague; add the expected behaviour.
-- No HTTP status codes anywhere in blockers; usually means you're describing intent ("auth check happens") instead of behaviour ("returns 403").
-
-You can safely re-run preflight after edits — it has no side effects.
-
-### Step 5 — Stop before authoring Targets
-
-Targets are the API-surface specifics (endpoint paths, methods). The host knows its API better than you do. If the spec mentions an OpenAPI file, point the host at it (`list_targets(openapi_path=...)`); otherwise tell the user that targets need to be authored by hand or generated from an OpenAPI spec.
-
-Do not generate targets even if the spec lists endpoints. The host will compose them when it runs the loop.
-
-### Step 6 — Summarize
+### Step 4 — Summarize
 
 Return to the user (or orchestrator):
 
 - Number of weapons authored.
 - One-line summary per weapon (id + title).
-- Any preflight failures and why.
-- Suggested next steps: provide a target / OpenAPI path, then run the gauntlet skill.
+- Suggested next steps: run the gauntlet skill.
 
 ## What this skill does not do
 
 - It does not run the adversarial loop. Authoring and running are separate concerns; the host composes them.
 - It does not score the authored weapons for coverage. (That's a future feature; for now, human review.)
-- It does not write Targets, Arsenals, or users.yaml.
+- It does not write users.yaml.
 - It does not invoke any LLM other than itself — no API calls, no separate Anthropic/OpenAI clients.
 - It does not modify weapons that already exist in `.gauntlet/weapons/`. If a weapon with the same id is already there, surface the conflict and let the user decide; don't overwrite.
 

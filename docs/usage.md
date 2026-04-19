@@ -23,9 +23,6 @@ Gauntlet exposes seven MCP tools. The host drives them in roughly this order:
 1. **Orchestrator**: pick a weapon and target.
    ```
    list_weapons()         → list[WeaponBrief]
-   list_targets()         → list[Target]
-   assess_weapon(id, t)   → WeaponAssessment   # optional preflight
-   default_iteration_specs() → list[IterationSpec]
    ```
 
 2. **Per iteration** (typically four - baseline → boundary → adversarial_misuse → targeted_escalation):
@@ -42,11 +39,13 @@ Gauntlet exposes seven MCP tools. The host drives them in roughly this order:
 
 4. **Orchestrator**:
    ```
-   assemble_run_report(iterations, holdout_results, clearance_threshold=0.9)
+   assemble_run_report(run_id, weapon_id, clearance_threshold=0.9)
    → { risk_report, clearance }
+   assemble_final_clearance(run_id, clearance_threshold=0.9)
+   → FinalClearance
    ```
 
-The host is responsible for preserving the train/test split in its own prompts. Gauntlet enforces it structurally only for `list_weapons` (which returns `WeaponBrief` - no blockers field exists to leak). For every other tool, leakage is a prompt-discipline matter.
+The train/test split is enforced at the permission layer via the per-role subagents' MCP-tool allowlists, plus at the buffer boundary by `record_iteration` (which rejects findings carrying blocker text).
 
 ## Writing weapons
 
@@ -70,21 +69,6 @@ Tips:
 - One weapon per file, named for the property it protects (e.g. `task_ownership.yaml`).
 - Write blockers as falsifiable statements about what the system does, not how.
 
-## Writing targets
-
-Targets define the API surface a weapon is tested against. One target per YAML file in `.gauntlet/targets/`.
-
-```yaml
-# .gauntlet/targets/task_endpoints.yaml
-title: Task ownership endpoints
-endpoints:
-  - POST /tasks
-  - PATCH /tasks/{id}
-  - GET /tasks/{id}
-```
-
-One weapon can be paired with many targets - run the loop once per weapon/target combination.
-
 ## User authentication
 
 If your API uses authentication, create `.gauntlet/users.yaml` with per-user credentials. Credentials themselves stay in env vars; the YAML just names them. See [README - User authentication](../README.md#user-authentication).
@@ -102,30 +86,6 @@ users:
 ```
 
 Users omitted from the file fall back to the default `X-User: <name>` header.
-
-## Arsenals
-
-An Arsenal bundles related weapons under one YAML file so the host can load an entire attack class (authorization, input validation, OWASP top-10) in one call.
-
-```yaml
-# .gauntlet/authz_arsenal.yaml
-name: authz
-description: Authorization and ownership enforcement weapons
-weapons:
-  - id: identity_swap
-    title: Users cannot access or modify each other's resources
-    description: >
-      The API must enforce resource ownership at every endpoint.
-    blockers:
-      - A write request by a non-owner is rejected with 403 or 404
-      - A read request by a non-owner returns 403 or 404
-```
-
-Pass `arsenal_path` to `list_weapons`, `get_weapon`, or `assess_weapon` to load from an arsenal.
-
-## OpenAPI-driven targets
-
-If your API has an OpenAPI 3.x spec, pass `openapi_path` to `list_targets` to auto-generate `Target` objects from the spec instead of writing them by hand. Targets parsed from the spec are prepended to any manually-defined targets read from `targets_path`.
 
 ## Interpreting results and acting
 

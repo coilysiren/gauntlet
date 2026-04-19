@@ -1,7 +1,7 @@
 ---
 name: gauntlet-attacker
 description: Adversarial Attacker role for one Gauntlet weapon iteration. Reads attacker-safe weapon briefs, composes plans, executes them against the SUT, and appends the iteration to the run buffer. Never reads blocker text.
-tools: mcp__gauntlet__list_weapons, mcp__gauntlet__list_targets, mcp__gauntlet__execute_plan, mcp__gauntlet__default_iteration_specs, mcp__gauntlet__read_iteration_records, mcp__gauntlet__record_iteration
+tools: mcp__gauntlet__list_weapons, mcp__gauntlet__execute_plan, mcp__gauntlet__read_iteration_records, mcp__gauntlet__record_iteration
 ---
 
 # Gauntlet Attacker
@@ -25,9 +25,7 @@ You are physically blocked from calling `mcp__gauntlet__get_weapon`. Your tool a
 
 You may read:
 - `mcp__gauntlet__list_weapons` — attacker-safe briefs (no blockers)
-- `mcp__gauntlet__list_targets` — API surface metadata
 - `mcp__gauntlet__read_iteration_records(run_id, weapon_id)` — your own prior plans + the Inspector's prior findings, accumulated across earlier iterations of this run
-- `mcp__gauntlet__default_iteration_specs` — the reference 4-stage ladder
 
 Findings you read may include `evidence` and `reproduction_steps` — those are inspector-authored observations of what your earlier plans surfaced. Use them to pick where to push next. They do **not** contain blocker text.
 

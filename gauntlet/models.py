@@ -199,7 +199,6 @@ class Weapon(GauntletModel):
     title: str
     description: str
     blockers: list[str]
-    inspired_by: str | None = None
 
     @field_validator("id")
     @classmethod
@@ -214,36 +213,6 @@ class Weapon(GauntletModel):
     def brief(self) -> WeaponBrief:
         """Return the attacker-safe view of this weapon (no blockers)."""
         return WeaponBrief(id=self.id, title=self.title, description=self.description)
-
-
-class Arsenal(GauntletModel):
-    """A named collection of Weapons.
-
-    Arsenals group related weapons under a single label so the host can load
-    an entire attack surface in one MCP call.  Pass ``arsenal_path`` to
-    ``list_weapons`` / ``get_weapon`` / ``assess_weapon`` to load from an
-    arsenal file instead of a weapons directory.
-
-    An arsenal YAML file contains a ``name`` and a ``weapons`` list.
-    """
-
-    name: str
-    description: str = ""
-    weapons: list[Weapon]
-
-
-class WeaponAssessment(GauntletModel):
-    """Result of a preflight quality check on a Weapon.
-
-    When ``proceed`` is ``False``, the host should skip the weapon. The
-    ``issues`` list explains why the weapon was rejected; ``suggestions``
-    offers actionable fixes.
-    """
-
-    quality_score: float = Field(ge=0.0, le=1.0)
-    issues: list[str]
-    suggestions: list[str]
-    proceed: bool
 
 
 class Target(GauntletModel):
@@ -354,13 +323,3 @@ class FinalClearance(GauntletModel):
     rationale: str
     clearance_threshold: float
     per_weapon_reports: list[WeaponReport]
-
-
-class GauntletRun(GauntletModel):
-    clearance: Clearance | None = None
-    weapon: Weapon | None = None
-    target: Target | None = None
-    iterations: list[IterationRecord]
-    holdout_results: list[ExecutionResult] = Field(default_factory=list)
-    weapon_assessment: WeaponAssessment | None = None
-    risk_report: RiskReport
