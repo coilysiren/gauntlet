@@ -12,7 +12,7 @@
 
 Gauntlet is a two-role adversarial MCP server that infers software correctness by observing how code behaves under sustained, targeted attack. It's designed as quality control for a dark-factory environment - where code is written by bots and verified by attack.
 
-The name comes from "running the gauntlet": a challenge where you must survive a sustained barrage from all sides. Here, the host Claude Code agent drives the system under test through escalating tiers of adversarial pressure until hidden failure modes become detectable - then gates promotion on whether any signal came through.
+**You run your service through the gauntlet.** That's the operating verb: point the host agent at a running service, hand it the weapon set, and the gauntlet is what the service survives (or doesn't). The name comes from "running the gauntlet": a challenge where you must survive a sustained barrage from all sides. Here, the host Claude Code agent drives the system under test through escalating tiers of adversarial pressure until hidden failure modes become detectable — then gates promotion on whether any signal came through.
 
 AI-written code can look correct - following conventions, passing linting, reading plausibly - while hiding behavioral failures that only surface under real use. Traditional tests don't catch this because the same agent that wrote the code also wrote the tests, sharing the same blind spots. Gauntlet is built for this: the host's Attacker context assumes the code is broken and generates plans the code author never considered, and the `blockers` in each Weapon are never loaded into that context, preserving a real train/test split that prevents the agent from inadvertently writing code that passes by knowing what the tests check.
 

@@ -1,6 +1,6 @@
 ---
 name: gauntlet
-description: Adversarial API inspection via the Gauntlet MCP server. Use this skill when the user wants to stress-test a running HTTP API under attack, validate authorization/ownership/input invariants before promoting code, or run Gauntlet's role-disciplined adversarial loop against a SUT. Triggers include "run gauntlet", "adversarial test", "check before merging", "attack this API", "run the hardening loop".
+description: Adversarial API inspection via the Gauntlet MCP server. Use this skill when the user wants to run their service through the gauntlet — stress-test a running HTTP API under attack, validate authorization/ownership/input invariants before promoting code, or drive Gauntlet's role-disciplined adversarial loop against a SUT. Triggers include "run the gauntlet", "run my service through the gauntlet", "run it through the gauntlet", "adversarial test", "check before merging", "attack this API", "run the hardening loop".
 ---
 
 # Gauntlet
