@@ -1,9 +1,9 @@
 """Subagent definitions ship with the plugin and carry the right allowlists.
 
 The tool allowlist on each subagent is what physically enforces Gauntlet's
-train/test split (Ask 1 from the LUCA handoff). If a subagent's allowlist
-silently grows to include a forbidden tool, the structural enforcement
-collapses back to prompt discipline. These tests catch that.
+train/test split. If a subagent's allowlist silently grows to include a
+forbidden tool, the structural enforcement collapses back to prompt
+discipline. These tests catch that.
 """
 
 from __future__ import annotations

@@ -181,7 +181,7 @@ def test_list_weapon_ids_unknown_run_raises(tmp_path: Path) -> None:
 
 # ---------------------------------------------------------------------------
 # MCP tool surface — exercised against the default ``.gauntlet/runs`` path
-# in a chdir'd tmp_path, the way LUCA invokes them.
+# in a chdir'd tmp_path, the way the host invokes them.
 # ---------------------------------------------------------------------------
 
 

@@ -1,10 +1,10 @@
 """MCP server exposing Gauntlet's deterministic primitives.
 
-Gauntlet runs exclusively inside a Claude Code session driven by LUCA.
-Per-role subagents (gauntlet-attacker, gauntlet-inspector,
-gauntlet-holdout-evaluator) call this MCP server for the deterministic
-pieces: weapon loading, plan execution against the SUT, run-buffer
-management, and clearance assembly.
+Gauntlet runs exclusively inside a Claude Code session driven by a
+dark-factory orchestrator. Per-role subagents (gauntlet-attacker,
+gauntlet-inspector, gauntlet-holdout-evaluator) call this MCP server for
+the deterministic pieces: weapon loading, plan execution against the SUT,
+run-buffer management, and clearance assembly.
 
 The train/test split is enforced at the Claude Code permission layer via
 the subagents' MCP-tool allowlists, plus at the buffer boundary by
@@ -40,7 +40,7 @@ mcp = FastMCP("gauntlet")
 _DEFAULT_WEAPONS_PATH = ".gauntlet/weapons"
 
 # Relative path resolved against cwd at filesystem-access time, so a host that
-# chdir's into the project root (LUCA's pattern) gets the right buffer location.
+# chdir's into the project root gets the right buffer location.
 _run_store = RunStore()
 
 

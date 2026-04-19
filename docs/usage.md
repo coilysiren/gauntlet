@@ -73,7 +73,7 @@ Tips:
 
 If the SUT requires authentication, the orchestrator passes `user_headers` to `execute_plan`: a `dict[str, dict[str, str]]` mapping user names to per-user request headers, e.g. `{"alice": {"Authorization": "Bearer ..."}}`. Users without an entry fall back to the default `X-User: <name>` header.
 
-LUCA's orchestrator already holds these credentials (it provisioned them during deployment), so it passes them in directly — no `.gauntlet/users.yaml` file needed.
+A dark-factory orchestrator already holds these credentials (it provisioned them during deployment), so it passes them in directly — no `.gauntlet/users.yaml` file needed.
 
 ## Interpreting results and acting
 
