@@ -47,13 +47,7 @@ _AUTHZ_PLAN = Plan(
 
 
 def _spec(name: str = "baseline") -> IterationSpec:
-    return IterationSpec(
-        index=1,
-        name=name,
-        goal=name,
-        attacker_prompt="",
-        inspector_prompt="",
-    )
+    return IterationSpec(index=1, name=name, goal=name)
 
 
 # ---------------------------------------------------------------------------
@@ -116,10 +110,9 @@ def test_list_weapons_omits_blockers(weapons_dir: Path) -> None:
     briefs = list_weapons(weapons_path=str(weapons_dir))
     assert len(briefs) == 1
     brief = briefs[0]
-    assert brief.id == "resource_ownership_write_isolation"
-    assert brief.title == "Users cannot modify each other's tasks"
-    # WeaponBrief has no blockers field — Pydantic enforces this, but belt-and-braces:
-    assert not hasattr(brief, "blockers")
+    assert brief["id"] == "resource_ownership_write_isolation"
+    assert brief["title"] == "Users cannot modify each other's tasks"
+    assert "blockers" not in brief  # the attacker view never carries blocker text
 
 
 def test_get_weapon_returns_full_weapon(weapons_dir: Path) -> None:

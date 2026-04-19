@@ -58,13 +58,7 @@ _AUTHZ_PLAN = Plan(
 
 
 def _spec(name: str = "baseline") -> IterationSpec:
-    return IterationSpec(
-        index=1,
-        name=name,
-        goal=name,
-        attacker_prompt="",
-        inspector_prompt="",
-    )
+    return IterationSpec(index=1, name=name, goal=name)
 
 
 def _make_iteration(spec: IterationSpec) -> IterationRecord:
@@ -186,71 +180,59 @@ def test_list_weapon_ids_unknown_run_raises(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# MCP tool surface
+# MCP tool surface — exercised against the default ``.gauntlet/runs`` path
+# in a chdir'd tmp_path, the way LUCA invokes them.
 # ---------------------------------------------------------------------------
 
 
-def test_start_run_tool_returns_run_id(tmp_path: Path) -> None:
-    out = start_run(weapon_ids=["weapon_a"], runs_path=str(tmp_path))
+def test_start_run_tool_returns_run_id(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    out = start_run(weapon_ids=["weapon_a"])
     assert "run_id" in out
-    assert (tmp_path / out["run_id"] / "manifest.json").exists()
+    assert (tmp_path / ".gauntlet" / "runs" / out["run_id"] / "manifest.json").exists()
 
 
-def test_iteration_buffer_tools_round_trip(tmp_path: Path) -> None:
-    out = start_run(weapon_ids=["weapon_a"], runs_path=str(tmp_path))
+def test_iteration_buffer_tools_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    out = start_run(weapon_ids=["weapon_a"])
     run_id = out["run_id"]
     record = _make_iteration(_spec())
 
-    record_iteration(
-        run_id=run_id,
-        weapon_id="weapon_a",
-        iteration_record=record,
-        runs_path=str(tmp_path),
-    )
-    records = read_iteration_records(run_id=run_id, weapon_id="weapon_a", runs_path=str(tmp_path))
+    record_iteration(run_id=run_id, weapon_id="weapon_a", iteration_record=record)
+    records = read_iteration_records(run_id=run_id, weapon_id="weapon_a")
     assert len(records) == 1
     assert records[0].plans[0].name == _AUTHZ_PLAN.name
 
 
-def test_holdout_buffer_tools_round_trip(tmp_path: Path) -> None:
-    out = start_run(weapon_ids=["weapon_a"], runs_path=str(tmp_path))
+def test_holdout_buffer_tools_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    out = start_run(weapon_ids=["weapon_a"])
     run_id = out["run_id"]
     execution = make_execution_result(plan_name=_AUTHZ_PLAN.name)
     holdout = HoldoutResult(weapon_id="weapon_a", execution_result=execution)
 
-    record_holdout_result(
-        run_id=run_id,
-        weapon_id="weapon_a",
-        holdout_result=holdout,
-        runs_path=str(tmp_path),
-    )
-    results = read_holdout_results(run_id=run_id, weapon_id="weapon_a", runs_path=str(tmp_path))
+    record_holdout_result(run_id=run_id, weapon_id="weapon_a", holdout_result=holdout)
+    results = read_holdout_results(run_id=run_id, weapon_id="weapon_a")
     assert len(results) == 1
     assert results[0].execution_result.plan_name == _AUTHZ_PLAN.name
 
 
-def test_assemble_run_report_buffer_mode(tmp_path: Path) -> None:
-    out = start_run(weapon_ids=["weapon_a"], runs_path=str(tmp_path))
+def test_assemble_run_report_buffer_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    out = start_run(weapon_ids=["weapon_a"])
     run_id = out["run_id"]
     record = _make_iteration(_spec())
-    record_iteration(
-        run_id=run_id,
-        weapon_id="weapon_a",
-        iteration_record=record,
-        runs_path=str(tmp_path),
-    )
+    record_iteration(run_id=run_id, weapon_id="weapon_a", iteration_record=record)
     execution = make_execution_result(plan_name=_AUTHZ_PLAN.name)
     record_holdout_result(
         run_id=run_id,
         weapon_id="weapon_a",
         holdout_result=HoldoutResult(weapon_id="weapon_a", execution_result=execution),
-        runs_path=str(tmp_path),
     )
 
     out = assemble_run_report(
         run_id=run_id,
         weapon_id="weapon_a",
-        runs_path=str(tmp_path),
         clearance_threshold=0.9,
     )
     assert out["clearance"] is not None

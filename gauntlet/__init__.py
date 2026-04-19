@@ -19,7 +19,6 @@ from .models import (
     RiskReport,
     Target,
     Weapon,
-    WeaponBrief,
     WeaponReport,
 )
 from .runs import RunStore
@@ -45,7 +44,6 @@ __all__ = [
     "RunStore",
     "Target",
     "Weapon",
-    "WeaponBrief",
     "WeaponReport",
     "aggregate_final_clearance",
     "build_risk_report",

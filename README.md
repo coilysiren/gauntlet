@@ -45,7 +45,7 @@ Without the skill, a host could still call the MCP tools ad-hoc, but it would ha
 
 | Tool | Purpose | Allowed in role |
 |---|---|---|
-| `list_weapons(weapons_path)` | List attacker-safe `WeaponBrief`s (no blockers) | Orchestrator, Attacker |
+| `list_weapons(weapons_path)` | List attacker-safe weapon views — `{id, title, description}` only, no blockers | Orchestrator, Attacker |
 | `get_weapon(weapon_id, weapons_path)` | Return full weapon including blockers | Orchestrator, HoldoutEvaluator |
 | `execute_plan(url, plan, user_headers)` | Deterministically run a `Plan` against the SUT | Orchestrator, Attacker, HoldoutEvaluator |
 | `start_run(weapon_ids)` | Initialize a per-run iteration + holdout buffer; returns an opaque `run_id` | Orchestrator |

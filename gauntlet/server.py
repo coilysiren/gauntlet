@@ -31,23 +31,17 @@ from .models import (
     Plan,
     RiskReport,
     Weapon,
-    WeaponBrief,
     WeaponReport,
 )
-from .runs import DEFAULT_RUNS_PATH, RunStore
+from .runs import RunStore
 
 mcp = FastMCP("gauntlet")
 
 _DEFAULT_WEAPONS_PATH = ".gauntlet/weapons"
 
-_run_store = RunStore(DEFAULT_RUNS_PATH)
-
-
-def _store(runs_path: str | None) -> RunStore:
-    """Return the shared store, or a per-call store if a custom path is given."""
-    if runs_path is None or runs_path == DEFAULT_RUNS_PATH:
-        return _run_store
-    return RunStore(runs_path)
+# Relative path resolved against cwd at filesystem-access time, so a host that
+# chdir's into the project root (LUCA's pattern) gets the right buffer location.
+_run_store = RunStore()
 
 
 def _load_weapons_from_dir(path: Path) -> list[Weapon]:
@@ -64,13 +58,13 @@ def _load_weapons(weapons_path: str) -> list[Weapon]:
 
 
 @mcp.tool()
-def list_weapons(weapons_path: str = _DEFAULT_WEAPONS_PATH) -> list[WeaponBrief]:
+def list_weapons(weapons_path: str = _DEFAULT_WEAPONS_PATH) -> list[dict[str, str | None]]:
     """Return attacker-safe views of available weapons.
 
-    ``blockers`` are intentionally omitted. Call this in the host's Attacker
-    context to pick a weapon to probe.
+    Each entry is ``{id, title, description}`` — ``blockers`` are intentionally
+    omitted. Call this in the host's Attacker context to pick a weapon.
     """
-    return [w.brief() for w in _load_weapons(weapons_path)]
+    return [w.attacker_view() for w in _load_weapons(weapons_path)]
 
 
 @mcp.tool()
@@ -109,7 +103,6 @@ def assemble_run_report(
     run_id: str,
     weapon_id: str,
     clearance_threshold: float = 0.90,
-    runs_path: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the final ``RiskReport`` and ``Clearance`` for one weapon.
 
@@ -117,9 +110,8 @@ def assemble_run_report(
     the report. Returns ``risk_report`` plus a clearance recommendation
     (``pass``, ``conditional``, or ``block``).
     """
-    store = _store(runs_path)
-    records = store.read_iteration_records(run_id, weapon_id)
-    holdouts = [hr.execution_result for hr in store.read_holdout_results(run_id, weapon_id)]
+    records = _run_store.read_iteration_records(run_id, weapon_id)
+    holdouts = [hr.execution_result for hr in _run_store.read_holdout_results(run_id, weapon_id)]
 
     report, clearance = build_risk_report(records, holdouts, clearance_threshold)
     return {
@@ -129,7 +121,7 @@ def assemble_run_report(
 
 
 @mcp.tool()
-def start_run(weapon_ids: list[str], runs_path: str | None = None) -> dict[str, str]:
+def start_run(weapon_ids: list[str]) -> dict[str, str]:
     """Initialize a new run-scoped buffer and return the opaque ``run_id``.
 
     Carry the returned ``run_id`` through subsequent ``record_iteration``,
@@ -137,7 +129,7 @@ def start_run(weapon_ids: list[str], runs_path: str | None = None) -> dict[str, 
     ``read_holdout_results``, and ``assemble_run_report`` calls. The buffer
     is short-lived: one run, one host session.
     """
-    return {"run_id": _store(runs_path).start_run(weapon_ids)}
+    return {"run_id": _run_store.start_run(weapon_ids)}
 
 
 @mcp.tool()
@@ -145,7 +137,6 @@ def record_iteration(
     run_id: str,
     weapon_id: str,
     iteration_record: IterationRecord,
-    runs_path: str | None = None,
 ) -> dict[str, str]:
     """Append one ``IterationRecord`` to the weapon's per-run buffer.
 
@@ -155,21 +146,19 @@ def record_iteration(
     blocker text, and the train/test split forbids it from entering this
     buffer.
     """
-    _store(runs_path).record_iteration(run_id, weapon_id, iteration_record)
+    _run_store.record_iteration(run_id, weapon_id, iteration_record)
     return {"status": "ok"}
 
 
 @mcp.tool()
-def read_iteration_records(
-    run_id: str, weapon_id: str, runs_path: str | None = None
-) -> list[IterationRecord]:
+def read_iteration_records(run_id: str, weapon_id: str) -> list[IterationRecord]:
     """Return every ``IterationRecord`` previously appended for this weapon.
 
     Called by the Attacker (to read its own prior plans + Inspector findings)
     and by the Inspector (to read prior findings). Both reads are train/test
     safe: nothing returned here ever contains blocker text.
     """
-    return _store(runs_path).read_iteration_records(run_id, weapon_id)
+    return _run_store.read_iteration_records(run_id, weapon_id)
 
 
 @mcp.tool()
@@ -177,7 +166,6 @@ def record_holdout_result(
     run_id: str,
     weapon_id: str,
     holdout_result: HoldoutResult,
-    runs_path: str | None = None,
 ) -> dict[str, str]:
     """Append one ``HoldoutResult`` to the weapon's holdout buffer.
 
@@ -185,21 +173,19 @@ def record_holdout_result(
     derived from a weapon's blocker. ``HoldoutResult.weapon_id`` must match
     the ``weapon_id`` argument.
     """
-    _store(runs_path).record_holdout_result(run_id, weapon_id, holdout_result)
+    _run_store.record_holdout_result(run_id, weapon_id, holdout_result)
     return {"status": "ok"}
 
 
 @mcp.tool()
-def read_holdout_results(
-    run_id: str, weapon_id: str, runs_path: str | None = None
-) -> list[HoldoutResult]:
+def read_holdout_results(run_id: str, weapon_id: str) -> list[HoldoutResult]:
     """Return every ``HoldoutResult`` previously appended for this weapon.
 
     Called by the Orchestrator when assembling reports. Must NOT be called
     from the Attacker or Inspector role — holdout outcomes carry blocker
     semantics and reading them collapses the train/test split.
     """
-    return _store(runs_path).read_holdout_results(run_id, weapon_id)
+    return _run_store.read_holdout_results(run_id, weapon_id)
 
 
 @mcp.tool()
@@ -207,7 +193,6 @@ def assemble_final_clearance(
     run_id: str,
     clearance_threshold: float = 0.90,
     weapon_ids: list[str] | None = None,
-    runs_path: str | None = None,
 ) -> FinalClearance:
     """Aggregate every per-weapon report in a run into one overall clearance.
 
@@ -229,13 +214,12 @@ def assemble_final_clearance(
     contexts must not see per-weapon reports — they carry confirmed-failure
     text that paraphrases blocker semantics.
     """
-    store = _store(runs_path)
-    weapons = list(weapon_ids) if weapon_ids is not None else store.list_weapon_ids(run_id)
+    weapons = list(weapon_ids) if weapon_ids is not None else _run_store.list_weapon_ids(run_id)
 
     per_weapon: list[WeaponReport] = []
     for wid in weapons:
-        records = store.read_iteration_records(run_id, wid)
-        holdouts = [hr.execution_result for hr in store.read_holdout_results(run_id, wid)]
+        records = _run_store.read_iteration_records(run_id, wid)
+        holdouts = [hr.execution_result for hr in _run_store.read_holdout_results(run_id, wid)]
         report, clearance = build_risk_report(records, holdouts, clearance_threshold)
         per_weapon.append(WeaponReport(weapon_id=wid, risk_report=report, clearance=clearance))
 

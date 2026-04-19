@@ -22,11 +22,11 @@ Gauntlet exposes seven MCP tools. The host drives them in roughly this order:
 
 1. **Orchestrator**: pick a weapon and target.
    ```
-   list_weapons()         → list[WeaponBrief]
+   list_weapons()         → list[dict]   # {id, title, description}
    ```
 
 2. **Per iteration** (typically four - baseline → boundary → adversarial_misuse → targeted_escalation):
-   - **Attacker context** (reads `WeaponBrief` only): compose one or more `Plan`s targeting the weapon's surface, drawing on prior iteration results.
+   - **Attacker context** (reads the attacker view of the weapon — `{id, title, description}` only): compose one or more `Plan`s targeting the weapon's surface, drawing on prior iteration results.
    - **Drone** (via MCP): `execute_plan(url, plan, user_headers)` → `ExecutionResult`. Repeat per plan.
    - **Inspector context** (reads `ExecutionResult`s, not blockers): produce `Finding`s. Optionally mark some as `is_anomaly=True`.
    - Append an `IterationRecord` bundling the spec, plans, results, and findings.

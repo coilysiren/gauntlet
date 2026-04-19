@@ -13,7 +13,6 @@ from gauntlet import (
     Plan,
     PlanStep,
     RiskReport,
-    RunStore,
     WeaponReport,
     aggregate_final_clearance,
 )
@@ -28,13 +27,7 @@ from ._factories import make_execution_result
 
 
 def _spec(name: str = "baseline") -> IterationSpec:
-    return IterationSpec(
-        index=1,
-        name=name,
-        goal=name,
-        attacker_prompt="",
-        inspector_prompt="",
-    )
+    return IterationSpec(index=1, name=name, goal=name)
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +175,7 @@ _AUTHZ_PLAN = Plan(
 )
 
 
-def _seed_weapon(store: RunStore, run_id: str, weapon_id: str) -> None:
+def _seed_weapon(run_id: str, weapon_id: str) -> None:
     execution = make_execution_result(plan_name=_AUTHZ_PLAN.name)
     record = IterationRecord(
         spec=_spec(),
@@ -190,30 +183,22 @@ def _seed_weapon(store: RunStore, run_id: str, weapon_id: str) -> None:
         execution_results=[execution],
         findings=[],
     )
-    record_iteration(
-        run_id=run_id,
-        weapon_id=weapon_id,
-        iteration_record=record,
-        runs_path=str(store._root),  # internal access OK in test
-    )
+    record_iteration(run_id=run_id, weapon_id=weapon_id, iteration_record=record)
     record_holdout_result(
         run_id=run_id,
         weapon_id=weapon_id,
         holdout_result=HoldoutResult(weapon_id=weapon_id, execution_result=execution),
-        runs_path=str(store._root),
     )
 
 
-def test_assemble_final_clearance_via_mcp(tmp_path: Path) -> None:
-    store = RunStore(tmp_path)
-    out = start_run(weapon_ids=["weapon_a", "weapon_b"], runs_path=str(tmp_path))
+def test_assemble_final_clearance_via_mcp(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    out = start_run(weapon_ids=["weapon_a", "weapon_b"])
     run_id = out["run_id"]
-    _seed_weapon(store, run_id, "weapon_a")
-    _seed_weapon(store, run_id, "weapon_b")
+    _seed_weapon(run_id, "weapon_a")
+    _seed_weapon(run_id, "weapon_b")
 
-    final = assemble_final_clearance(
-        run_id=run_id, clearance_threshold=0.9, runs_path=str(tmp_path)
-    )
+    final = assemble_final_clearance(run_id=run_id, clearance_threshold=0.9)
 
     assert len(final.per_weapon_reports) == 2
     assert {wr.weapon_id for wr in final.per_weapon_reports} == {"weapon_a", "weapon_b"}
@@ -222,22 +207,24 @@ def test_assemble_final_clearance_via_mcp(tmp_path: Path) -> None:
     assert final.max_risk_level == "low"
 
 
-def test_assemble_final_clearance_subset(tmp_path: Path) -> None:
-    store = RunStore(tmp_path)
-    out = start_run(weapon_ids=["weapon_a", "weapon_b"], runs_path=str(tmp_path))
+def test_assemble_final_clearance_subset(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    out = start_run(weapon_ids=["weapon_a", "weapon_b"])
     run_id = out["run_id"]
-    _seed_weapon(store, run_id, "weapon_a")
+    _seed_weapon(run_id, "weapon_a")
 
     final = assemble_final_clearance(
         run_id=run_id,
         clearance_threshold=0.9,
         weapon_ids=["weapon_a"],
-        runs_path=str(tmp_path),
     )
     assert len(final.per_weapon_reports) == 1
     assert final.per_weapon_reports[0].weapon_id == "weapon_a"
 
 
-def test_assemble_final_clearance_unknown_run_raises(tmp_path: Path) -> None:
+def test_assemble_final_clearance_unknown_run_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(ValueError, match="No run"):
-        assemble_final_clearance(run_id="nope", runs_path=str(tmp_path))
+        assemble_final_clearance(run_id="nope")

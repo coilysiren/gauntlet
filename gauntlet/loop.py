@@ -103,7 +103,7 @@ def _confidence_score(records: list[IterationRecord], coverage: list[str]) -> fl
 
     Composed of three signals:
     - Plan diversity: distinct attack categories relative to iterations run.
-    - Surface exploration depth: unique endpoints hit vs endpoints targeted.
+    - Surface exploration depth: unique endpoints hit per iteration.
     - Exploration completeness: next_targets flagged by findings but not yet covered.
     """
     if not records:
@@ -113,16 +113,7 @@ def _confidence_score(records: list[IterationRecord], coverage: list[str]) -> fl
     distinct_categories = len({plan.category for plan in all_plans}) if all_plans else 0
     plan_diversity = min(1.0, distinct_categories / len(records))
 
-    targeted = [
-        endpoint
-        for record in records
-        if record.spec.target
-        for endpoint in record.spec.target.endpoints
-    ]
-    if targeted:
-        surface_depth = min(1.0, len(coverage) / len(targeted))
-    else:
-        surface_depth = min(1.0, len(coverage) / max(1, len(records) * 2))
+    surface_depth = min(1.0, len(coverage) / max(1, len(records) * 2))
 
     all_findings = [finding for record in records for finding in record.findings]
     next_targets = {surface for finding in all_findings for surface in finding.next_targets}

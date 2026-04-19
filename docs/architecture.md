@@ -51,21 +51,21 @@ The skills are pure prose (no executable code); they encode role discipline that
 
 | Tool | Returns | Side effect |
 |---|---|---|
-| `list_weapons(weapons_path)` | `list[WeaponBrief]` (no blockers) | reads YAML from disk |
+| `list_weapons(weapons_path)` | `list[dict]` of `{id, title, description}` (no blockers) | reads YAML from disk |
 | `get_weapon(weapon_id, weapons_path)` | `Weapon` (with blockers) | reads YAML from disk |
 | `execute_plan(url, plan, user_headers)` | `ExecutionResult` | sends real HTTP requests to the SUT |
-| `start_run(weapon_ids, runs_path)` | `{run_id}` | creates `runs_path/<run_id>/` |
-| `record_iteration(run_id, weapon_id, iteration_record, runs_path)` | `{status: ok}` | appends one `IterationRecord` to the buffer |
-| `read_iteration_records(run_id, weapon_id, runs_path)` | `list[IterationRecord]` | reads from the buffer |
-| `record_holdout_result(run_id, weapon_id, holdout_result, runs_path)` | `{status: ok}` | appends one `HoldoutResult` to the buffer |
-| `read_holdout_results(run_id, weapon_id, runs_path)` | `list[HoldoutResult]` | reads from the buffer |
+| `start_run(weapon_ids)` | `{run_id}` | creates `.gauntlet/runs/<run_id>/` |
+| `record_iteration(run_id, weapon_id, iteration_record)` | `{status: ok}` | appends one `IterationRecord` to the buffer |
+| `read_iteration_records(run_id, weapon_id)` | `list[IterationRecord]` | reads from the buffer |
+| `record_holdout_result(run_id, weapon_id, holdout_result)` | `{status: ok}` | appends one `HoldoutResult` to the buffer |
+| `read_holdout_results(run_id, weapon_id)` | `list[HoldoutResult]` | reads from the buffer |
 | `assemble_run_report(run_id, weapon_id, threshold)` | `dict` with `risk_report` + `clearance` | reads from the buffer |
 | `assemble_final_clearance(run_id, clearance_threshold, weapon_ids?)` | `FinalClearance` | reads every per-weapon report from the buffer and aggregates |
 
 ### Run-scoped buffer
 
-`start_run` initializes a per-run filesystem buffer under `runs_path/<run_id>/`
-(default `.gauntlet/runs/<run_id>/`). Each weapon gets its own subdirectory
+`start_run` initializes a per-run filesystem buffer under `.gauntlet/runs/<run_id>/`
+(resolved against the host's cwd). Each weapon gets its own subdirectory
 with two append-only JSONL files: `iterations.jsonl` (one `IterationRecord`
 per line) and `holdouts.jsonl` (one `HoldoutResult` per line). `record_*`
 calls append; `read_*` calls read the whole file. JSONL is chosen so that

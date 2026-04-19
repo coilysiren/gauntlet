@@ -119,36 +119,20 @@ class Finding(GauntletModel):
     is_anomaly: bool = False
 
 
-class WeaponBrief(GauntletModel):
-    """Attacker-visible slice of a Weapon.
-
-    Contains only what the Attacker is allowed to see: the weapon id, title,
-    and a plain-English description of the attack surface.  The acceptance
-    criteria (``blockers``) are intentionally absent — they are withheld to
-    preserve the train/test separation and prevent reward-hacking.
-    """
-
-    id: str | None = None
-    title: str
-    description: str
-
-
 class Weapon(GauntletModel):
     """Engineer-authored weapon that drives the adversarial loop.
 
     ``id`` is a stable snake_case identifier (e.g.
     ``resource_ownership_write_isolation``) used to accumulate failure
-    knowledge across runs.  ``title`` is the human-readable alias (e.g.
-    "Users cannot modify each other's tasks").  Together they let the system
-    correlate findings over time without schema churn.
+    knowledge across runs.  ``title`` is the human-readable alias.
 
-    ``description`` (exposed via ``WeaponBrief``) is given to the Attacker to
-    guide probe plan generation.  ``blockers`` are the Weapon's Vitals —
-    externally observable truths about expected system behavior — given only
-    to the HoldoutVitals.  The Attacker never receives them, preserving the
-    train/test separation.
+    ``description`` is given to the Attacker to guide probe plan generation.
+    ``blockers`` are the Weapon's Vitals — externally observable truths
+    about expected system behavior — given only to the HoldoutEvaluator.
+    The Attacker never receives them, preserving the train/test separation.
 
-    Use ``Weapon.brief()`` to produce the attacker-safe view.
+    Use ``Weapon.attacker_view()`` to produce the dict that ``list_weapons``
+    returns to attacker contexts.
     """
 
     _SNAKE_CASE_RE: ClassVar[re.Pattern[str]] = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$")
@@ -168,9 +152,9 @@ class Weapon(GauntletModel):
             )
         return value
 
-    def brief(self) -> WeaponBrief:
+    def attacker_view(self) -> dict[str, str | None]:
         """Return the attacker-safe view of this weapon (no blockers)."""
-        return WeaponBrief(id=self.id, title=self.title, description=self.description)
+        return {"id": self.id, "title": self.title, "description": self.description}
 
 
 class Target(GauntletModel):
@@ -189,11 +173,6 @@ class IterationSpec(GauntletModel):
     index: int
     name: str
     goal: str
-    attacker_prompt: str
-    inspector_prompt: str
-    tier: int = 0
-    weapon: WeaponBrief | None = None
-    target: Target | None = None
 
 
 class IterationRecord(GauntletModel):
