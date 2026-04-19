@@ -34,6 +34,7 @@ from .models import (
     Arsenal,
     Clearance,
     ExecutionResult,
+    HoldoutResult,
     IterationRecord,
     IterationSpec,
     Plan,
@@ -45,12 +46,22 @@ from .models import (
 )
 from .openapi import parse_openapi
 from .roles import DemoWeaponAssessor
+from .runs import DEFAULT_RUNS_PATH, RunStore
 
 mcp = FastMCP("gauntlet")
 
 _DEFAULT_WEAPONS_PATH = ".gauntlet/weapons"
 _DEFAULT_TARGETS_PATH = ".gauntlet/targets"
 _DEFAULT_USERS_PATH = ".gauntlet/users.yaml"
+
+_run_store = RunStore(DEFAULT_RUNS_PATH)
+
+
+def _store(runs_path: str | None) -> RunStore:
+    """Return the shared store, or a per-call store if a custom path is given."""
+    if runs_path is None or runs_path == DEFAULT_RUNS_PATH:
+        return _run_store
+    return RunStore(runs_path)
 
 
 def _load_weapons_from_dir(path: Path) -> list[Weapon]:
@@ -171,22 +182,116 @@ def assess_weapon(
 
 @mcp.tool()
 def assemble_run_report(
-    iterations: list[IterationRecord],
+    iterations: list[IterationRecord] | None = None,
     holdout_results: list[ExecutionResult] | None = None,
     clearance_threshold: float = 0.90,
+    run_id: str | None = None,
+    weapon_id: str | None = None,
+    runs_path: str | None = None,
 ) -> dict[str, Any]:
-    """Assemble the final ``RiskReport`` and ``Clearance`` from iteration records.
+    """Assemble the final ``RiskReport`` and ``Clearance`` for one weapon.
 
-    The host passes the ``IterationRecord`` list it has accumulated across
-    attacker/inspector turns, plus any holdout ``ExecutionResult`` objects
-    from running the weapon's acceptance plans. Returns the report plus a
-    clearance recommendation (``pass``, ``conditional``, or ``block``).
+    Two calling shapes are supported:
+
+    - **Run-buffer mode** (preferred): pass ``run_id`` and ``weapon_id``. The
+      server reads the iteration and holdout buffers it owns and assembles
+      the report. The host does not manage filesystem layout for run state.
+    - **Explicit mode** (legacy): pass ``iterations`` and ``holdout_results``
+      directly. Useful for hosts that have not yet adopted ``start_run`` /
+      ``record_iteration`` / ``record_holdout_result``.
+
+    Returns the report plus a clearance recommendation (``pass``,
+    ``conditional``, or ``block``).
     """
-    report, clearance = build_risk_report(iterations, holdout_results or [], clearance_threshold)
+    if run_id is not None and weapon_id is not None:
+        store = _store(runs_path)
+        records = store.read_iteration_records(run_id, weapon_id)
+        holdouts = [hr.execution_result for hr in store.read_holdout_results(run_id, weapon_id)]
+    elif iterations is not None:
+        records = iterations
+        holdouts = list(holdout_results or [])
+    else:
+        raise ValueError("assemble_run_report requires either (run_id, weapon_id) or 'iterations'.")
+
+    report, clearance = build_risk_report(records, holdouts, clearance_threshold)
     return {
         "risk_report": report.model_dump(),
         "clearance": clearance.model_dump() if clearance else None,
     }
+
+
+@mcp.tool()
+def start_run(weapon_ids: list[str], runs_path: str | None = None) -> dict[str, str]:
+    """Initialize a new run-scoped buffer and return the opaque ``run_id``.
+
+    Carry the returned ``run_id`` through subsequent ``record_iteration``,
+    ``read_iteration_records``, ``record_holdout_result``,
+    ``read_holdout_results``, and ``assemble_run_report`` calls. The buffer
+    is short-lived: one run, one host session.
+    """
+    return {"run_id": _store(runs_path).start_run(weapon_ids)}
+
+
+@mcp.tool()
+def record_iteration(
+    run_id: str,
+    weapon_id: str,
+    iteration_record: IterationRecord,
+    runs_path: str | None = None,
+) -> dict[str, str]:
+    """Append one ``IterationRecord`` to the weapon's per-run buffer.
+
+    Called by the Attacker (after composing plans + executing them) and by
+    the Inspector (after analysing ``ExecutionResult``s into ``Finding``s).
+    Findings must have ``violated_blocker=None`` — the Inspector never sees
+    blocker text, and the train/test split forbids it from entering this
+    buffer.
+    """
+    _store(runs_path).record_iteration(run_id, weapon_id, iteration_record)
+    return {"status": "ok"}
+
+
+@mcp.tool()
+def read_iteration_records(
+    run_id: str, weapon_id: str, runs_path: str | None = None
+) -> list[IterationRecord]:
+    """Return every ``IterationRecord`` previously appended for this weapon.
+
+    Called by the Attacker (to read its own prior plans + Inspector findings)
+    and by the Inspector (to read prior findings). Both reads are train/test
+    safe: nothing returned here ever contains blocker text.
+    """
+    return _store(runs_path).read_iteration_records(run_id, weapon_id)
+
+
+@mcp.tool()
+def record_holdout_result(
+    run_id: str,
+    weapon_id: str,
+    holdout_result: HoldoutResult,
+    runs_path: str | None = None,
+) -> dict[str, str]:
+    """Append one ``HoldoutResult`` to the weapon's holdout buffer.
+
+    Called only by the HoldoutEvaluator after executing one acceptance plan
+    derived from a weapon's blocker. ``HoldoutResult.weapon_id`` must match
+    the ``weapon_id`` argument.
+    """
+    _store(runs_path).record_holdout_result(run_id, weapon_id, holdout_result)
+    return {"status": "ok"}
+
+
+@mcp.tool()
+def read_holdout_results(
+    run_id: str, weapon_id: str, runs_path: str | None = None
+) -> list[HoldoutResult]:
+    """Return every ``HoldoutResult`` previously appended for this weapon.
+
+    Called by the Orchestrator when assembling reports. Must NOT be called
+    from the Attacker or Inspector role — holdout outcomes carry blocker
+    semantics and reading them collapses the train/test split.
+    """
+    return _store(runs_path).read_holdout_results(run_id, weapon_id)
 
 
 @mcp.tool()
@@ -209,8 +314,13 @@ __all__ = [
     "get_weapon",
     "list_targets",
     "list_weapons",
-    "mcp",
     "main",
+    "mcp",
+    "read_holdout_results",
+    "read_iteration_records",
+    "record_holdout_result",
+    "record_iteration",
+    "start_run",
 ]
 
 

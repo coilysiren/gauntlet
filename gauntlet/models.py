@@ -100,6 +100,11 @@ class AssertionResult(GauntletModel):
 
 
 class ExecutionResult(GauntletModel):
+    # Override extra="forbid" so the computed ``satisfaction_score`` can survive
+    # a JSON round-trip through the run buffer (model_dump emits it, validate
+    # would otherwise reject it as an unknown field).
+    model_config = ConfigDict(extra="ignore")
+
     plan_name: str
     category: str
     goal: str
@@ -270,6 +275,22 @@ class IterationRecord(GauntletModel):
     plans: list[Plan]
     execution_results: list[ExecutionResult]
     findings: list[Finding]
+
+
+class HoldoutResult(GauntletModel):
+    """Result of executing one acceptance plan derived from a Weapon's blockers.
+
+    Captured by the HoldoutEvaluator after running a structured ``Plan`` that
+    tests one of the weapon's blockers. The orchestrator reads these via
+    ``read_holdout_results`` to assemble the final clearance gate. Inspector
+    and Attacker contexts must never read holdout results — doing so leaks
+    blocker semantics back across the train/test split.
+    """
+
+    weapon_id: str
+    blocker_index: int | None = None
+    blocker: str | None = None
+    execution_result: ExecutionResult
 
 
 class Clearance(GauntletModel):

@@ -12,7 +12,8 @@ Gauntlet does not call any LLM itself and requires no Anthropic/OpenAI credentia
 gauntlet/
 ├── models.py    # Pydantic data models - the shared vocabulary with the host
 │                #   (Action/Observation wrap HttpRequest/HttpResponse for
-│                #   surface-agnostic execution)
+│                #   surface-agnostic execution; HoldoutResult wraps an
+│                #   ExecutionResult with the blocker it tested)
 ├── auth.py      # user authentication config (BearerAuth, ApiKeyAuth, UsersConfig)
 ├── openapi.py   # OpenAPI 3.x spec parser - produces Target objects
 ├── roles.py     # WeaponAssessor protocol + DemoWeaponAssessor
@@ -23,9 +24,10 @@ gauntlet/
 │   └── webdriver.py  # WebDriverAdapter (stub)
 ├── executor.py  # Drone - runs plans via Adapter.execute(Action) → Observation
 ├── loop.py      # build_default_iteration_specs + build_risk_report helpers
+├── runs.py      # RunStore - per-run iteration + holdout buffer (filesystem)
 ├── store.py     # PlanStore and FindingsStore - disk-backed knowledge indexed by weapon ID
 ├── schemas/     # JSON Schema files for weapon / target / users / arsenal
-└── server.py    # FastMCP server exposing the 7 gauntlet tools
+└── server.py    # FastMCP server exposing the gauntlet tools
 ```
 
 Dependency order:
@@ -36,9 +38,10 @@ models  ←  adapters (http, cli, webdriver, __init__)
 models  ←  openapi
 models  ←  roles
 models  ←  store
+models  ←  runs
 models + adapters  ←  executor
 models  ←  loop
-models + auth + openapi + roles + executor + loop + adapters  ←  server
+models + auth + openapi + roles + executor + loop + adapters + runs  ←  server
 ```
 
 Nothing imports from `server.py`. The MCP entry point (`main()` in `server.py`) runs `FastMCP.run()` which speaks stdio to the Claude Code process that launched it.
@@ -52,8 +55,31 @@ Nothing imports from `server.py`. The MCP entry point (`main()` in `server.py`) 
 | `list_targets(targets_path, openapi_path)` | `list[Target]` | reads YAML / OpenAPI spec from disk |
 | `execute_plan(url, plan, users_path)` | `ExecutionResult` | sends real HTTP requests to the SUT |
 | `assess_weapon(weapon_id, target, ...)` | `WeaponAssessment` | reads YAML from disk |
-| `assemble_run_report(iterations, holdout_results, threshold)` | `dict` with `risk_report` + `clearance` | none |
+| `start_run(weapon_ids, runs_path)` | `{run_id}` | creates `runs_path/<run_id>/` |
+| `record_iteration(run_id, weapon_id, iteration_record, runs_path)` | `{status: ok}` | appends one `IterationRecord` to the buffer |
+| `read_iteration_records(run_id, weapon_id, runs_path)` | `list[IterationRecord]` | reads from the buffer |
+| `record_holdout_result(run_id, weapon_id, holdout_result, runs_path)` | `{status: ok}` | appends one `HoldoutResult` to the buffer |
+| `read_holdout_results(run_id, weapon_id, runs_path)` | `list[HoldoutResult]` | reads from the buffer |
+| `assemble_run_report(run_id, weapon_id, ... \| iterations, holdout_results, threshold)` | `dict` with `risk_report` + `clearance` | reads from the buffer (or accepts explicit lists) |
 | `default_iteration_specs()` | `list[IterationSpec]` | none |
+
+### Run-scoped buffer
+
+`start_run` initializes a per-run filesystem buffer under `runs_path/<run_id>/`
+(default `.gauntlet/runs/<run_id>/`). Each weapon gets its own subdirectory
+with two append-only JSONL files: `iterations.jsonl` (one `IterationRecord`
+per line) and `holdouts.jsonl` (one `HoldoutResult` per line). `record_*`
+calls append; `read_*` calls read the whole file. JSONL is chosen so that
+multiple subagent processes — possibly fronted by separate Claude Code
+sessions — can append concurrently without coordinating on a lock.
+
+The buffer is short-lived: one run, one host session. Nothing depends on
+state surviving across runs. If a run crashes, restart from `start_run`.
+
+`record_iteration` rejects any `IterationRecord` whose findings carry a
+non-null `violated_blocker`. The Inspector context never sees blocker text,
+so a populated `violated_blocker` would mean a train/test split violation;
+the schema enforces this at the buffer boundary.
 
 ## Train/test split
 

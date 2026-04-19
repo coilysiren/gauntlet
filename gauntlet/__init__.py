@@ -12,6 +12,7 @@ from .models import (
     ExecutionStepResult,
     Finding,
     GauntletRun,
+    HoldoutResult,
     HttpRequest,
     HttpResponse,
     IterationRecord,
@@ -27,6 +28,7 @@ from .models import (
 )
 from .openapi import parse_openapi
 from .roles import DemoWeaponAssessor, WeaponAssessor
+from .runs import RunStore
 from .store import FindingsStore, PlanStore
 
 __all__ = [
@@ -46,6 +48,7 @@ __all__ = [
     "Finding",
     "FindingsStore",
     "GauntletRun",
+    "HoldoutResult",
     "HttpApi",
     "HttpRequest",
     "HttpResponse",
@@ -57,6 +60,7 @@ __all__ = [
     "PlanStep",
     "PlanStore",
     "RiskReport",
+    "RunStore",
     "Target",
     "UsersConfig",
     "Weapon",
