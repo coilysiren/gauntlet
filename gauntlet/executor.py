@@ -94,9 +94,65 @@ def _evaluate_assertion(
     assertion: Assertion, step_results: list[ExecutionStepResult]
 ) -> AssertionResult:
     step_result = step_results[assertion.step_index - 1]
-    passed = step_result.response.status_code == assertion.expected
-    return AssertionResult(
-        name=assertion.name,
-        passed=passed,
-        detail=f"expected status {assertion.expected}, got {step_result.response.status_code}",
-    )
+    actual = step_result.response.status_code
+    passed, detail = _match_status_code(assertion.expected, actual)
+    return AssertionResult(name=assertion.name, passed=passed, detail=detail)
+
+
+def _match_status_code(expected: Any, actual: int) -> tuple[bool, str]:
+    """Compare ``actual`` against the ``expected`` matcher shape.
+
+    Supported shapes:
+
+    - scalar (``int``) — exact equality (legacy behavior).
+    - ``list`` — any-of: actual must be in the list.
+    - ``dict`` with ``min``/``max`` — inclusive range, either bound optional.
+    - ``dict`` with ``not`` — negation: actual must not equal the value.
+    - ``dict`` with ``in`` — explicit any-of, same semantics as the list form.
+
+    Any other shape produces a failing assertion with a descriptive detail
+    rather than raising; the evaluator is called inside the host-facing
+    tool boundary and should never blow up on a malformed plan.
+    """
+    if isinstance(expected, dict):
+        return _match_dict(expected, actual)
+    if isinstance(expected, list):
+        passed = actual in expected
+        return passed, f"expected status in {expected}, got {actual}"
+    # Fallback: scalar equality (covers int, None, str — legacy shape).
+    passed = actual == expected
+    return passed, f"expected status {expected}, got {actual}"
+
+
+def _match_dict(expected: dict[str, Any], actual: int) -> tuple[bool, str]:
+    """Dispatch dict-shaped matchers.
+
+    Exactly one recognized key must be present. Multiple keys, unrecognized
+    keys, or a missing key produce a failing assertion with a clear detail.
+    """
+    keys = set(expected.keys())
+    if keys == {"not"}:
+        target = expected["not"]
+        return actual != target, f"expected status != {target}, got {actual}"
+    if keys == {"in"}:
+        options = expected["in"]
+        if not isinstance(options, list):
+            return False, f"invalid matcher {expected!r}: 'in' value must be a list"
+        return actual in options, f"expected status in {options}, got {actual}"
+    if keys <= {"min", "max"} and keys:
+        lo = expected.get("min")
+        hi = expected.get("max")
+        if lo is not None and not isinstance(lo, int):
+            return False, f"invalid matcher {expected!r}: 'min' must be int"
+        if hi is not None and not isinstance(hi, int):
+            return False, f"invalid matcher {expected!r}: 'max' must be int"
+        lo_ok = lo is None or actual >= lo
+        hi_ok = hi is None or actual <= hi
+        passed = lo_ok and hi_ok
+        bounds = []
+        if lo is not None:
+            bounds.append(f">= {lo}")
+        if hi is not None:
+            bounds.append(f"<= {hi}")
+        return passed, f"expected status {' and '.join(bounds)}, got {actual}"
+    return False, f"invalid matcher {expected!r}: unsupported shape"

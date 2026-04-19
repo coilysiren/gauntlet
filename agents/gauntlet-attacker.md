@@ -57,6 +57,18 @@ Findings you read may include `evidence` and `reproduction_steps` — those are 
    - `step_index` is 1-based.
    - `kind: status_code` requires integer `expected` and null `rule`; `kind: rule` requires a `rule` name and null `expected`.
 
+   Status-code matcher shapes (all valid values for `expected`):
+
+   | Shape | Meaning |
+   |---|---|
+   | `200` | exact match |
+   | `[403, 404]` | any-of (list) |
+   | `{"in": [403, 404]}` | any-of (explicit) |
+   | `{"min": 400, "max": 499}` | inclusive range; either bound optional |
+   | `{"not": 200}` | anything except 200 |
+
+   An invalid matcher (unknown keys, multiple keys, wrong types) fails the assertion with a descriptive `detail` rather than raising — use that to catch typos at runtime.
+
 4. Execute each plan: `execute_plan(url, plan, user_headers)` → `ExecutionResult`. Collect them.
 
 5. Append the iteration to the buffer:

@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
+
 from gauntlet import (
+    Assertion,
     Drone,
     HttpRequest,
     HttpResponse,
     Plan,
     PlanStep,
 )
+from gauntlet.executor import _match_status_code
 from gauntlet.http import HttpApi, SendResult
 
 
@@ -241,3 +247,101 @@ def test_execution_step_result_defaults_preserve_existing_fixtures() -> None:
 def test_drone_accepts_httpapi_instance() -> None:
     """Drone's constructor signature still takes an HttpApi (no behavior check)."""
     _ = Drone(HttpApi("http://unused"))
+
+
+# ---------------------------------------------------------------------------
+# Task 3: richer assertion matchers
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("expected", "actual", "should_pass"),
+    [
+        # Scalar — existing behavior.
+        (200, 200, True),
+        (200, 403, False),
+        # List — any-of.
+        ([403, 404], 404, True),
+        ([403, 404], 200, False),
+        # Dict "min"/"max" — inclusive range.
+        ({"min": 400, "max": 499}, 403, True),
+        ({"min": 400, "max": 499}, 500, False),
+        ({"min": 400}, 403, True),
+        ({"min": 400}, 399, False),
+        ({"max": 299}, 200, True),
+        ({"max": 299}, 300, False),
+        # Dict "not" — negation.
+        ({"not": 200}, 200, False),
+        ({"not": 200}, 403, True),
+        # Dict "in" — explicit any-of.
+        ({"in": [403, 404]}, 403, True),
+        ({"in": [403, 404]}, 200, False),
+    ],
+)
+def test_match_status_code_shapes(expected: Any, actual: int, should_pass: bool) -> None:
+    passed, detail = _match_status_code(expected, actual)
+    assert passed is should_pass
+    assert str(actual) in detail  # detail references the observed value
+
+
+@pytest.mark.parametrize(
+    "expected",
+    [
+        {"min": 400, "not": 500},  # multiple recognized keys at once
+        {"wat": 1},  # unknown key
+        {"in": "not-a-list"},  # malformed "in"
+        {"min": "oops"},  # non-int bound
+        {},  # empty dict
+    ],
+)
+def test_match_status_code_invalid_matcher_fails_gracefully(expected: Any) -> None:
+    """Malformed matchers produce a failing assertion with a descriptive detail.
+
+    The evaluator must never raise: the host calls it over MCP and a bad
+    matcher should surface as test failure text, not as a server crash.
+    """
+    passed, detail = _match_status_code(expected, 200)
+    assert passed is False
+    assert "invalid matcher" in detail or "unsupported" in detail
+
+
+def test_evaluate_assertion_list_matcher_via_full_plan() -> None:
+    """End-to-end: a list ``expected`` in a Plan is honored by the Drone."""
+    drone, _ = _drone([HttpResponse(status_code=404, body={})])
+    plan = Plan(
+        name="any_of",
+        category="crud",
+        goal="any-of matcher runs end-to-end",
+        steps=[PlanStep(user="userA", request=HttpRequest(method="GET", path="/x"))],
+        assertions=[
+            Assertion(name="any_4xx_scalar", expected=[403, 404], step_index=1),
+        ],
+    )
+
+    result = drone.run_plan(plan)
+
+    assert result.assertions[0].passed is True
+
+
+def test_evaluate_assertion_range_matcher_via_full_plan() -> None:
+    """End-to-end: a range matcher in a Plan is honored by the Drone."""
+    drone, _ = _drone([HttpResponse(status_code=403, body={})])
+    plan = Plan(
+        name="any_4xx",
+        category="authz",
+        goal="range matcher runs end-to-end",
+        steps=[PlanStep(user="userA", request=HttpRequest(method="GET", path="/x"))],
+        assertions=[
+            Assertion(
+                name="any_4xx",
+                expected={"min": 400, "max": 499},
+                step_index=1,
+            ),
+        ],
+    )
+
+    result = drone.run_plan(plan)
+
+    assert result.assertions[0].passed is True
+    assert "400" in result.assertions[0].detail
+    assert "499" in result.assertions[0].detail
