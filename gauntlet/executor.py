@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from .adapters import Adapter
+from .http import HttpApi
 from .models import (
-    Action,
     Assertion,
     AssertionResult,
     ExecutionResult,
@@ -12,7 +11,7 @@ from .models import (
 
 
 class Drone:
-    def __init__(self, sut: Adapter) -> None:
+    def __init__(self, sut: HttpApi) -> None:
         self._sut = sut
 
     def run_plan(self, plan: Plan) -> ExecutionResult:
@@ -20,9 +19,7 @@ class Drone:
         context: dict[str, object] = {}
         for index, step in enumerate(plan.steps, start=1):
             request = step.request.model_copy(update={"path": step.request.path.format(**context)})
-            action = Action.from_http_request(request)
-            observation = self._sut.execute(step.user, action)
-            response = observation.to_http_response()
+            response = self._sut.send(step.user, request)
             step_results.append(
                 ExecutionStepResult(
                     step_index=index,

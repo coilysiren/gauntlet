@@ -19,8 +19,8 @@ from typing import Any
 import yaml
 from mcp.server.fastmcp import FastMCP
 
-from .adapters import HttpApi
 from .executor import Drone
+from .http import HttpApi
 from .loop import aggregate_final_clearance, build_risk_report
 from .models import (
     Clearance,

@@ -1,10 +1,17 @@
+"""HTTP execution surface — the only adapter Gauntlet ships with.
+
+Carryover from when the adversarial loop was meant to span multiple surfaces
+(HTTP, CLI, WebDriver) is gone. There is one execution mode, and the Drone
+calls into ``HttpApi.send`` directly.
+"""
+
 from __future__ import annotations
 
 from typing import Any
 
 import requests as http
 
-from ..models import Action, HttpRequest, HttpResponse, Observation
+from .models import HttpRequest, HttpResponse
 
 
 class HttpApi:
@@ -48,6 +55,5 @@ class HttpApi:
             body = {"_raw": resp.text}
         return HttpResponse(status_code=resp.status_code, body=body)
 
-    def execute(self, user: str, action: Action) -> Observation:
-        response = self.send(user, action.to_http_request())
-        return Observation.from_http_response(response)
+
+__all__ = ["HttpApi"]

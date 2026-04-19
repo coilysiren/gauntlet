@@ -11,13 +11,10 @@ Gauntlet does not call any LLM itself and requires no Anthropic/OpenAI credentia
 ```
 gauntlet/
 ├── models.py    # Pydantic data models - the shared vocabulary with the host
-│                #   (Action/Observation wrap HttpRequest/HttpResponse for
-│                #   surface-agnostic execution; HoldoutResult wraps an
-│                #   ExecutionResult with the blocker it tested)
-├── adapters/    # Adapter protocol + HttpApi (the only execution surface)
-│   ├── __init__.py   # Adapter protocol (send + execute)
-│   └── http.py       # HttpApi — real HTTP requests via `requests`
-├── executor.py  # Drone - runs plans via Adapter.execute(Action) → Observation
+│                #   (HoldoutResult wraps an ExecutionResult with the blocker
+│                #   it tested)
+├── http.py      # HttpApi — real HTTP requests via `requests`
+├── executor.py  # Drone - runs plans by calling HttpApi.send per step
 ├── loop.py      # build_risk_report + aggregate_final_clearance helpers
 ├── runs.py      # RunStore - per-run iteration + holdout buffer (filesystem)
 └── server.py    # FastMCP server exposing the gauntlet tools
@@ -26,11 +23,11 @@ gauntlet/
 Dependency order:
 
 ```
-models  ←  adapters
+models  ←  http
 models  ←  runs
-models + adapters  ←  executor
+models + http  ←  executor
 models  ←  loop
-models + executor + loop + adapters + runs  ←  server
+models + executor + loop + http + runs  ←  server
 ```
 
 Nothing imports from `server.py`. The MCP entry point (`main()` in `server.py`) runs `FastMCP.run()` which speaks stdio to the Claude Code process that launched it.
@@ -140,9 +137,5 @@ The host itself is non-deterministic (it's an LLM agent), but Gauntlet doesn't r
 **Why MCP only?** Gauntlet's consumer is the dark-factory pipeline, which runs inside Claude Code. Keeping CLI + MCP + library surfaces in parallel multiplied integration cost without adding value for the one consumer that actually uses it. MCP is the one surface that lets the host drive Gauntlet as a tool inside its own loop.
 
 **Why Pydantic?** All interchange objects are `BaseModel` subclasses with `extra="forbid"`. This catches schema drift early and makes JSON serialization/deserialization free - including over the MCP tool boundary.
-
-**Why Protocols instead of ABCs?** Structural subtyping lets callers pass any object that has the right methods without importing from `gauntlet`. Only `Adapter` remains as a protocol now that Attacker/Inspector are host-driven.
-
-**Why Action/Observation instead of passing HttpRequest/HttpResponse directly?** Carryover from when the adversarial loop was meant to span multiple surfaces (HTTP, CLI, WebDriver). With LUCA targeting HTTP-only, the wrapper is vestigial; a follow-up commit will inline it.
 
 **Why host-driven Attacker/Inspector?** Because Gauntlet runs inside Claude Code, the host already has an LLM ready to play both roles. Re-invoking a separate Anthropic or OpenAI client from Gauntlet's own process would require credentials Gauntlet doesn't have a clean way to acquire, and would duplicate reasoning capacity the host already provides.

@@ -1,8 +1,7 @@
-from .adapters import Adapter, HttpApi
 from .executor import Drone
+from .http import HttpApi
 from .loop import aggregate_final_clearance, build_risk_report
 from .models import (
-    Action,
     Assertion,
     AssertionResult,
     Clearance,
@@ -15,7 +14,6 @@ from .models import (
     HttpResponse,
     IterationRecord,
     IterationSpec,
-    Observation,
     Plan,
     PlanStep,
     RiskReport,
@@ -27,8 +25,6 @@ from .models import (
 from .runs import RunStore
 
 __all__ = [
-    "Action",
-    "Adapter",
     "Assertion",
     "AssertionResult",
     "Clearance",
@@ -43,7 +39,6 @@ __all__ = [
     "HttpResponse",
     "IterationRecord",
     "IterationSpec",
-    "Observation",
     "Plan",
     "PlanStep",
     "RiskReport",
