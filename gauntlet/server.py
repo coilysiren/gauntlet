@@ -13,6 +13,7 @@ the subagents' MCP-tool allowlists, plus at the buffer boundary by
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -20,16 +21,19 @@ import yaml
 from mcp.server.fastmcp import FastMCP
 
 from ._log import configure_logging, log_tool_call
+from ._plausibility import check_holdout_plausibility
 from .executor import Drone
 from .http import HttpApi
 from .loop import aggregate_final_clearance, build_risk_report
 from .models import (
+    Assertion,
     Clearance,
     ExecutionResult,
     FinalClearance,
     HoldoutResult,
     IterationRecord,
     Plan,
+    PlanStep,
     RiskReport,
     Weapon,
     WeaponReport,
@@ -173,21 +177,71 @@ def read_iteration_records(run_id: str, weapon_id: str) -> list[IterationRecord]
         return _run_store.read_iteration_records(run_id, weapon_id)
 
 
+_DETAIL_EXPECTED_RE = re.compile(r"expected(?:\s+status)?\s+(\d{3})")
+
+
+def _plan_from_holdout(holdout_result: HoldoutResult) -> Plan:
+    """Reconstruct a Plan from the HoldoutResult's ExecutionResult.
+
+    ``HoldoutResult`` stores the executed ``ExecutionResult`` rather than the
+    original ``Plan``; the plausibility checker's signature takes a ``Plan``.
+    We rebuild one here with enough fidelity for the heuristics: per-step
+    ``user`` + ``request``, and ``Assertion.expected`` parsed out of
+    ``AssertionResult.detail`` (emitted by the Drone in a stable form).
+    """
+    er = holdout_result.execution_result
+    steps = [PlanStep(user=step.user, request=step.request) for step in er.steps]
+    assertions: list[Assertion] = []
+    for ar in er.assertions:
+        expected: int | None = None
+        match = _DETAIL_EXPECTED_RE.search(ar.detail)
+        if match:
+            expected = int(match.group(1))
+        assertions.append(
+            Assertion(
+                kind="status_code",
+                name=ar.name,
+                expected=expected,
+                # step_index is required; default to 1 if the detail didn't
+                # preserve it. Plausibility only reads assertion.expected.
+                step_index=1,
+            )
+        )
+    return Plan(
+        name=er.plan_name,
+        category=er.category,
+        goal=er.goal,
+        steps=steps,
+        assertions=assertions,
+    )
+
+
 @mcp.tool()
 def record_holdout_result(
     run_id: str,
     weapon_id: str,
     holdout_result: HoldoutResult,
-) -> dict[str, str]:
+) -> dict[str, Any]:
     """Append one ``HoldoutResult`` to the weapon's holdout buffer.
 
     Called only by the HoldoutEvaluator after executing one acceptance plan
     derived from a weapon's blocker. ``HoldoutResult.weapon_id`` must match
     the ``weapon_id`` argument.
+
+    Returns ``{status, warnings}`` where ``warnings`` is a (possibly empty)
+    list of human-readable strings flagged by heuristic plausibility checks
+    against the plan. Warnings fire when the blocker references cross-user
+    behavior, a specific HTTP status code, or an HTTP method that the plan
+    doesn't obviously exercise. False positives are expected; the host
+    decides whether to surface them.
     """
     with log_tool_call("record_holdout_result", run_id=run_id, weapon_id=weapon_id):
         _run_store.record_holdout_result(run_id, weapon_id, holdout_result)
-        return {"status": "ok"}
+        warnings: list[str] = []
+        if holdout_result.blocker:
+            reconstructed = _plan_from_holdout(holdout_result)
+            warnings = check_holdout_plausibility(holdout_result.blocker, reconstructed)
+        return {"status": "ok", "warnings": warnings}
 
 
 @mcp.tool()

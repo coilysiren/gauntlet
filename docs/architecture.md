@@ -10,15 +10,16 @@ Gauntlet does not call any LLM itself and requires no Anthropic/OpenAI credentia
 
 ```
 gauntlet/
-├── models.py    # Pydantic data models - the shared vocabulary with the host
-│                #   (HoldoutResult wraps an ExecutionResult with the blocker
-│                #   it tested)
-├── http.py      # HttpApi — real HTTP requests via `requests`
-├── executor.py  # Drone - runs plans by calling HttpApi.send per step
-├── loop.py      # build_risk_report + aggregate_final_clearance helpers
-├── runs.py      # RunStore - per-run iteration + holdout buffer (filesystem)
-├── _log.py      # Private. JSON stderr logging + log_tool_call contextmgr
-└── server.py    # FastMCP server exposing the gauntlet tools
+├── models.py         # Pydantic data models - the shared vocabulary with the
+│                     #   host (HoldoutResult wraps an ExecutionResult with
+│                     #   the blocker it tested)
+├── http.py           # HttpApi — real HTTP requests via `requests`
+├── executor.py       # Drone - runs plans by calling HttpApi.send per step
+├── loop.py           # build_risk_report + aggregate_final_clearance helpers
+├── runs.py           # RunStore - per-run iteration + holdout buffer (fs)
+├── _log.py           # Private. JSON stderr logging + log_tool_call
+├── _plausibility.py  # Private. Heuristic holdout-plan plausibility checks
+└── server.py         # FastMCP server exposing the gauntlet tools
 ```
 
 Dependency order:
@@ -28,7 +29,8 @@ models  ←  http
 models  ←  runs
 models + http  ←  executor
 models  ←  loop
-_log + models + executor + loop + http + runs  ←  server
+models  ←  _plausibility
+_log + _plausibility + models + executor + loop + http + runs  ←  server
 ```
 
 Nothing imports from `server.py`. The MCP entry point (`main()` in `server.py`) runs `FastMCP.run()` which speaks stdio to the Claude Code process that launched it.
@@ -58,7 +60,7 @@ The skills are pure prose (no executable code); they encode role discipline that
 | `start_run(weapon_ids)` | `{run_id}` | creates `.gauntlet/runs/<run_id>/` |
 | `record_iteration(run_id, weapon_id, iteration_record)` | `{status: ok}` | appends one `IterationRecord` to the buffer |
 | `read_iteration_records(run_id, weapon_id)` | `list[IterationRecord]` | reads from the buffer |
-| `record_holdout_result(run_id, weapon_id, holdout_result)` | `{status: ok}` | appends one `HoldoutResult` to the buffer |
+| `record_holdout_result(run_id, weapon_id, holdout_result)` | `{status: ok, warnings: [...]}` | appends one `HoldoutResult` to the buffer; runs heuristic plausibility checks against the blocker |
 | `read_holdout_results(run_id, weapon_id)` | `list[HoldoutResult]` | reads from the buffer |
 | `assemble_run_report(run_id, weapon_id, threshold)` | `dict` with `risk_report` + `clearance` | reads from the buffer |
 | `assemble_final_clearance(run_id, clearance_threshold, weapon_ids?)` | `FinalClearance` | reads every per-weapon report from the buffer and aggregates |
