@@ -1,124 +1,81 @@
 ---
 name: gauntlet
-description: Adversarial API inspection via the Gauntlet MCP server. Use this skill when the user wants to stress-test a running HTTP API under attack, validate authorization/ownership/input invariants before promoting code, or run Gauntlet's two-role adversarial loop against a SUT. Triggers include "run gauntlet", "adversarial test", "check before merging", "attack this API", "run the hardening loop".
+description: Adversarial API inspection via the Gauntlet MCP server. Use this skill when the user wants to stress-test a running HTTP API under attack, validate authorization/ownership/input invariants before promoting code, or run Gauntlet's role-disciplined adversarial loop against a SUT. Triggers include "run gauntlet", "adversarial test", "check before merging", "attack this API", "run the hardening loop".
 ---
 
 # Gauntlet
 
-Gauntlet is an adversarial API inspection loop. **You** (the host agent) play both the Attacker and the Inspector roles. The Gauntlet MCP server handles the deterministic pieces: config loading, plan execution against the SUT, weapon assessment, and risk-report assembly.
+Gauntlet is an adversarial API inspection loop. **You** are the Orchestrator: you preflight weapons, drive the loop, and assemble the final report. The actual Attacker / Inspector / HoldoutEvaluator work runs inside dedicated **subagents** that the Gauntlet plugin ships alongside this skill, each with an MCP-tool allowlist that physically enforces the train/test split.
 
-Gauntlet's novelty is the train/test split: each Weapon has a `description` (the attack surface, shown to the Attacker) and `blockers` (the expected invariants, withheld from the Attacker and checked only by the HoldoutEvaluator). Violating the split is the single most common way to invalidate a run.
+Gauntlet's novelty is the train/test split: each Weapon has a `description` (the attack surface, shown to the Attacker) and `blockers` (the expected invariants, withheld from the Attacker and checked only by the HoldoutEvaluator). Violating the split invalidates the run. The subagent allowlists make a violation impossible at the permission layer rather than a matter of prompt discipline.
 
-## Train/test split (read this first)
+## The four roles
 
-| Role context you're in | Safe to read | Forbidden to read |
+| Role | Where it runs | MCP tools it can call |
 |---|---|---|
-| **Attacker** | `list_weapons` briefs, `list_targets`, own prior `Finding`s, own prior `ExecutionResult`s | `get_weapon` output, any `blockers` text, any `holdout_result` |
-| **Inspector** | `ExecutionResult`s, own prior `Finding`s | `get_weapon` output, any `blockers` text, any `holdout_result` |
-| **HoldoutEvaluator** | `get_weapon` output including `blockers`, `holdout_result`s | Attacker's plans / Inspector's findings (avoid carryover) |
-| **Orchestrator** | Everything except never reads and paraphrases `blockers` back to the Attacker | — |
+| **Orchestrator** | This skill (you) | every Gauntlet tool |
+| **Attacker** | `gauntlet-attacker` subagent | `list_weapons`, `list_targets`, `execute_plan`, `default_iteration_specs`, `read_iteration_records`, `record_iteration` |
+| **Inspector** | `gauntlet-inspector` subagent | `read_iteration_records`, `record_iteration` |
+| **HoldoutEvaluator** | `gauntlet-holdout-evaluator` subagent | `get_weapon`, `execute_plan`, `record_holdout_result` |
 
-When you transition between role contexts, **do not carry content over verbatim**. If you must summarize something across roles, strip blocker text. The Attacker never sees a blocker, not even a paraphrase of one.
+The Attacker and Inspector subagents cannot call `get_weapon` even if their prompts told them to — Claude Code's permission layer rejects the call before it reaches the MCP server. Likewise the HoldoutEvaluator cannot read the iteration buffer that holds Attacker plans and Inspector findings; it works from a fresh context informed only by the weapon's blockers.
 
 ## Prerequisites
 
-- The Gauntlet MCP server is registered (`claude mcp add gauntlet -- uv run gauntlet-mcp`). Confirm with `/mcp`.
-- The project has a `.gauntlet/` directory with at least one weapon YAML. If missing, tell the user and stop.
+- The Gauntlet plugin is installed; the MCP server is registered. Confirm with `/mcp` (should list `gauntlet` and its tools) and `/agents` (should list `gauntlet-attacker`, `gauntlet-inspector`, `gauntlet-holdout-evaluator`).
+- The project has a `.gauntlet/` directory with at least one weapon YAML. If missing, tell the user and stop — or, if the user has a product spec, suggest the `gauntlet-author` skill to generate weapons first.
 - A running SUT whose URL the host can reach. If the user hasn't named a URL, ask.
 - Existing tests pass. Gauntlet is the final check, not a first-pass linter.
 
 ## The loop
 
-### Step 1 — Orchestrator: pick and preflight
+### Step 1 — Orchestrator: pick weapons and start the run
 
-1. `list_weapons(weapons_path, arsenal_path)` → pick one by `id`. If the user named a weapon, use it. If not, present the list and ask.
-2. `list_targets(targets_path, openapi_path)` → pick a matching target (optional; a weapon can run without one).
-3. `assess_weapon(weapon_id, target)` → if `proceed=False`, print the issues and stop. Don't attempt to fix the weapon yourself.
+1. `list_weapons(weapons_path, arsenal_path)` → pick one (or several) by `id`. If the user named a weapon, use it. If not, present the list and ask.
+2. `list_targets(targets_path, openapi_path)` → pick a matching target per weapon (optional; a weapon can run without one).
+3. `assess_weapon(weapon_id, target)` for each → if `proceed=False`, print the issues and skip that weapon. Don't try to fix the weapon yourself.
 4. `default_iteration_specs()` → the reference 4-stage ladder (baseline → boundary → adversarial_misuse → targeted_escalation). Use verbatim unless the user has said otherwise.
+5. `start_run(weapon_ids=[...])` → `{run_id}`. Carry `run_id` through every subsequent dispatch.
 
-Initialize an empty `iterations: list[IterationRecord]` buffer.
+### Step 2 — For each weapon, iterate the train side (typically 4 iterations)
 
-### Step 2 — Attacker + Inspector: iterate (typically 4 times)
+For each `IterationSpec`, dispatch the Attacker subagent, then the Inspector subagent.
 
-For each `IterationSpec`:
+**Dispatch the Attacker** — pass `run_id`, `weapon_id`, the iteration spec, the SUT `url`, and `users_path`. The subagent will:
 
-**Attacker sub-step** (read only the `WeaponBrief`, the iteration spec, and prior iteration records):
+- read its weapon brief (no blockers),
+- read prior iteration records to see what's already been tried,
+- compose 2–4 plans, execute them, and append an `IterationRecord` (with empty `findings`) via `record_iteration`,
+- return a one-paragraph summary.
 
-Compose 2-4 `Plan`s probing the weapon surface. Vary categories across plans (`authz`, `crud`, `boundary`, `lifecycle`). Each `Plan` is:
+**Dispatch the Inspector** — pass `run_id`, `weapon_id`, and the iteration spec. The subagent will:
 
-```python
-{
-  "name": "snake_case_identifier",
-  "category": "authz|crud|boundary|lifecycle",
-  "goal": "one-sentence description of what this plan tests",
-  "steps": [
-    {"user": "userA", "request": {"method": "POST", "path": "/tasks", "body": {"title": "..."}}},
-    {"user": "userB", "request": {"method": "PATCH", "path": "/tasks/{task_id}", "body": {...}}},
-    {"user": "userA", "request": {"method": "GET",   "path": "/tasks/{task_id}"}},
-  ],
-  "assertions": [
-    {"name": "...", "kind": "status_code", "expected": 403, "step_index": 2},
-    {"name": "...", "kind": "rule", "rule": "task_not_modified_by_other_user", "step_index": 3},
-  ],
-}
-```
+- read the buffer to find the Attacker's latest record,
+- analyse the `ExecutionResult`s into `Finding`s (with `violated_blocker=null`, always — the buffer rejects anything else),
+- append a follow-up `IterationRecord` (with empty plans/results, populated findings) via `record_iteration`,
+- return a one-paragraph summary.
 
-Conventions:
-- `{task_id}` is a path template resolved from the `id` field of the first `POST /tasks` response.
-- `step_index` is 1-based.
-- Assertion `kind: status_code` requires an integer `expected` and `null` for `rule`; `kind: rule` requires a `rule` name and `null` for `expected`.
-- Prefer variety over repetition. Later iterations should target suspicious areas surfaced by earlier findings, not rehash them.
+If the Inspector reports a `high`-severity finding, you may stop iterating early. Note this in the final summary.
 
-**Drone sub-step**:
+### Step 3 — For each weapon, dispatch the HoldoutEvaluator (fresh context)
 
-For each plan: `execute_plan(url, plan, users_path)` → `ExecutionResult`. Collect them.
+Critical: do not paste any Attacker plan, Inspector finding, or summary into the HoldoutEvaluator's dispatch prompt. It runs from a fresh context with only `run_id`, `weapon_id`, the SUT `url`, and `users_path`. The subagent will:
 
-**Inspector sub-step** (read the `ExecutionResult`s + prior findings; **never** `blockers`):
+- call `get_weapon(weapon_id)` to read the blockers,
+- derive one acceptance plan per blocker, execute each, and append a `HoldoutResult` via `record_holdout_result`,
+- return a one-paragraph summary.
 
-Produce `Finding`s for real issues. Each:
+### Step 4 — Orchestrator: assemble the per-weapon report
 
-```python
-{
-  "issue": "snake_case_identifier",
-  "severity": "low|medium|high",             # high = auth bypass, privilege escalation, data corruption; medium = info leak; low = minor
-  "confidence": 0.0-1.0,
-  "rationale": "why this is a problem",
-  "evidence": [{"kind": "request|response|assertion|note", "content": "specific observation"}],
-  "reproduction_steps": ["Step 1: POST /tasks as userA ...", "Step 2: PATCH /tasks/{id} as userB — expect 403, got 200"],
-  "traces": [...],                          # copy from ExecutionResult.steps
-  "violated_blocker": null,                 # you don't know the blocker; leave null
-  "next_targets": ["ownership mutation", "list visibility", ...],
-  "is_anomaly": false,                       # set true for suspicious but non-violating observations
-  "plan_name": "..."
-}
-```
+For each weapon: `assemble_run_report(run_id=run_id, weapon_id=weapon_id, clearance_threshold=0.9)` → `{risk_report, clearance}`.
 
-Treat suspicious-but-not-violating observations as anomalies (`is_anomaly=True`, severity `low`). They show up separately in the risk report and inform future weapon refinement.
-
-**Append** one `IterationRecord(spec, plans, execution_results, findings)` to the buffer.
-
-Optional fail-fast: if a `high` finding appears, you may stop after the current iteration. Note this in the summary.
-
-### Step 3 — HoldoutEvaluator: execute the withheld vitals
-
-Start a fresh internal context. The Attacker/Inspector traces above inform nothing here.
-
-1. `get_weapon(weapon_id)` → full `Weapon` including `blockers`.
-2. For each blocker, construct **one structured `Plan`** that tests it. Typical patterns:
-   - "A PATCH by a non-owner is rejected with 403" → 3 steps: owner POSTs, non-owner PATCHes (assert status 403), owner GETs (assert rule `task_not_modified_by_other_user`).
-   - "A write by a non-owner is rejected with 403 or 404" → same shape, accept either status code.
-   - "GET by a non-owner returns 403 or 404" → POST as owner, GET as non-owner, assert status.
-3. `execute_plan(url, plan, users_path)` for each → collect `ExecutionResult`s. This is the `holdout_results` list.
-
-### Step 4 — Orchestrator: assemble the report
-
-`assemble_run_report(iterations=iterations, holdout_results=holdout_results, clearance_threshold=0.9)` → `{risk_report, clearance}`.
-
-Show the user:
+Show the user, per weapon:
 - `risk_level` (low | medium | high)
 - `confirmed_failures` (the list of violated invariants — safe to show, these are outcomes, not blocker text)
 - `clearance.recommendation` (pass | conditional | block) if present
 - `confidence_score` and `coverage` summary
+
+If you ran multiple weapons, follow up with `assemble_final_clearance(run_id)` to get the overall pass/fail decision across all of them.
 
 ## Acting on results
 
@@ -130,19 +87,39 @@ Show the user:
 
 Treat a `conditional` clearance as a signal for human review, not a green light.
 
-## Common mistakes to avoid
+## Why subagents (and not just role-context switching)
 
-- **Collapsing the split.** Loading `get_weapon` output into your Attacker context, even to "inform" plan generation. Blocker text must never reach the Attacker, not even paraphrased.
-- **Skipping the holdout phase.** The Inspector's findings are not a substitute for the holdout — the Inspector never saw the blockers.
-- **Over-specified plans.** Three broad plans covering three misuse patterns are higher value than one tightly-targeted plan aimed at a specific assertion.
-- **Reading `holdout_results` into the Inspector context of a later iteration.** Don't feed holdout outcomes back into the Attacker/Inspector loop.
-- **Editing weapon files mid-run.** If blockers change while you're iterating, the holdout is no longer a holdout. Stop and restart.
+Older versions of this skill drove the loop by switching contexts inside a single host session: "now I'm the Attacker, now I'm the Inspector, now I'm the HoldoutEvaluator." That worked, but the train/test split was held only by prompt discipline — a sloppy summary or a prompt-injection attack could collapse it silently.
+
+The subagent model fixes that structurally:
+
+- The Attacker subagent's tool allowlist does not include `mcp__gauntlet__get_weapon`. It cannot call it. Even if its prompt asks it to.
+- The Inspector subagent's allowlist does not include `mcp__gauntlet__get_weapon` or `mcp__gauntlet__read_holdout_results`.
+- The HoldoutEvaluator subagent's allowlist does not include `mcp__gauntlet__read_iteration_records`. It runs in fresh context with no carryover.
+- The MCP server's `record_iteration` rejects findings with non-null `violated_blocker`, so the Inspector cannot smuggle blocker-shaped data through the iteration buffer either.
+
+That is kernel-level enforcement of the split, not a stylistic recommendation.
+
+## Fallback: single-host mode
+
+If the host environment does not support subagent dispatch, you can drive all four roles from this session by context-switching, the way this skill used to. In that mode, the train/test split is held only by your own prompt discipline:
+
+| Role context you're in | Safe to read | Forbidden to read |
+|---|---|---|
+| **Attacker** | `list_weapons` briefs, `list_targets`, own prior `Finding`s, own prior `ExecutionResult`s | `get_weapon` output, any `blockers` text, any `holdout_result` |
+| **Inspector** | `ExecutionResult`s, own prior `Finding`s | `get_weapon` output, any `blockers` text, any `holdout_result` |
+| **HoldoutEvaluator** | `get_weapon` output including `blockers`, `holdout_result`s | Attacker's plans / Inspector's findings (avoid carryover) |
+| **Orchestrator** | Everything except never reads and paraphrases `blockers` back to the Attacker | — |
+
+When you transition between role contexts, **do not carry content over verbatim**. If you must summarize something across roles, strip blocker text. The Attacker never sees a blocker, not even a paraphrase of one.
+
+Prefer subagent dispatch whenever the environment supports it — it is the only mode where the split is not a discipline question.
 
 ## Single-call invocations
 
 Some prompts want a summary, not a full run:
 
-- "What weapons are available?" → `list_weapons()` and format the briefs. No iteration.
+- "What weapons are available?" → `list_weapons()` and format the briefs. No iteration, no run buffer.
 - "Is this weapon well-formed?" → `assess_weapon(id, target)` and show the result.
 - "What's the default iteration ladder?" → `default_iteration_specs()`.
 

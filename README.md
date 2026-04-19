@@ -34,10 +34,11 @@ On first invocation, `uv` auto-resolves the Python dependencies for the MCP serv
 
 ### What you get
 
-- **MCP server `gauntlet`** — the seven deterministic tools listed below.
-- **Skill `gauntlet`** — auto-loads on trigger phrases ("run gauntlet", "adversarial test", "check before merging") and walks the host through the role-disciplined loop.
+- **MCP server `gauntlet`** — the deterministic tools listed below.
+- **Skill `gauntlet`** — auto-loads on trigger phrases ("run gauntlet", "adversarial test", "check before merging") and walks the host through the role-disciplined loop as the Orchestrator.
+- **Subagents `gauntlet-attacker`, `gauntlet-inspector`, `gauntlet-holdout-evaluator`** — per-role definitions with MCP-tool allowlists that enforce the train/test split at the permission layer. The Orchestrator dispatches them; they cannot reach the tools their role is forbidden from using.
 
-Without the skill, a host could still call the MCP tools ad-hoc, but it would have to re-derive the loop every time and would be far more likely to collapse the train/test split. The plugin delivery is what makes the two pieces stay in sync.
+Without the skill, a host could still call the MCP tools ad-hoc, but it would have to re-derive the loop every time and would be far more likely to collapse the train/test split. The plugin delivery is what makes the four pieces stay in sync.
 
 ### Manual install (without the plugin)
 
@@ -55,17 +56,22 @@ cp path/to/gauntlet/skills/gauntlet/SKILL.md .claude/skills/gauntlet/SKILL.md
 
 ## MCP tools
 
-| Tool | Purpose | Use in host role |
+| Tool | Purpose | Allowed in role |
 |---|---|---|
-| `list_weapons(weapons_path, arsenal_path)` | List attacker-safe `WeaponBrief`s (no blockers) | Attacker |
-| `get_weapon(weapon_id, ...)` | Return full weapon including blockers | HoldoutEvaluator only |
-| `list_targets(targets_path, openapi_path)` | List configured `Target` surfaces | Attacker |
-| `execute_plan(url, plan, users_path)` | Deterministically run a `Plan` against the SUT | Attacker + HoldoutEvaluator |
+| `list_weapons(weapons_path, arsenal_path)` | List attacker-safe `WeaponBrief`s (no blockers) | Orchestrator, Attacker |
+| `get_weapon(weapon_id, ...)` | Return full weapon including blockers | Orchestrator, HoldoutEvaluator |
+| `list_targets(targets_path, openapi_path)` | List configured `Target` surfaces | Orchestrator, Attacker |
+| `execute_plan(url, plan, users_path)` | Deterministically run a `Plan` against the SUT | Orchestrator, Attacker, HoldoutEvaluator |
 | `assess_weapon(weapon_id, target, ...)` | Preflight quality check on a weapon | Orchestrator |
-| `assemble_run_report(iterations, holdout_results, clearance_threshold)` | Build final `RiskReport` + `Clearance` | Orchestrator |
+| `start_run(weapon_ids)` | Initialize a per-run iteration + holdout buffer; returns an opaque `run_id` | Orchestrator |
+| `record_iteration(run_id, weapon_id, iteration_record)` | Append an `IterationRecord` to the run buffer (rejects findings that carry blocker text) | Attacker, Inspector |
+| `read_iteration_records(run_id, weapon_id)` | Read prior `IterationRecord`s for one weapon in this run | Attacker, Inspector |
+| `record_holdout_result(run_id, weapon_id, holdout_result)` | Append a `HoldoutResult` to the run buffer | HoldoutEvaluator |
+| `read_holdout_results(run_id, weapon_id)` | Read prior `HoldoutResult`s for one weapon in this run | Orchestrator |
+| `assemble_run_report(run_id, weapon_id)` (or explicit lists) | Build per-weapon `RiskReport` + `Clearance` | Orchestrator |
 | `default_iteration_specs()` | Return the reference 4-stage escalation ladder | Orchestrator |
 
-The train/test split is maintained by host-side prompt discipline: only `list_weapons` is safe to read in the Attacker context. Pulling full weapons via `get_weapon` inside the Attacker context collapses the split and invalidates the run.
+The train/test split is enforced at the permission layer via MCP-tool allowlists on each per-role subagent — see the [`agents/`](agents/) directory. The Attacker subagent literally cannot call `get_weapon`, the Inspector subagent cannot call `get_weapon` or read holdout results, and the HoldoutEvaluator subagent cannot read the iteration buffer. A documented single-host fallback (no subagent dispatch) is available for environments that don't support subagents; see the skill for details.
 
 ## Project config directory
 

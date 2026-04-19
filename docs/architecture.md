@@ -83,42 +83,44 @@ the schema enforces this at the buffer boundary.
 
 ## Train/test split
 
-The split is preserved by host-side prompt discipline, not by Gauntlet's runtime:
+The split is enforced at two layers:
 
-- The Attacker context may read `list_weapons` (briefs have no blockers) and call `execute_plan`, but must never read `get_weapon` output - that would leak blocker text.
-- The HoldoutEvaluator context reads `get_weapon`, constructs acceptance plans from the blockers, and calls `execute_plan` to run them. Results feed into `assemble_run_report` via the `holdout_results` argument.
-- The Inspector context reads `ExecutionResult` objects to produce `Finding`s. It does not read blockers.
+1. **MCP-tool allowlists on per-role subagents.** The plugin ships three subagent definitions in `agents/`:
+   - `gauntlet-attacker` — allowlist excludes `get_weapon`, `read_holdout_results`, `record_holdout_result`. Can read its own prior plans + Inspector findings via `read_iteration_records`.
+   - `gauntlet-inspector` — allowlist excludes `get_weapon`, `read_holdout_results`, `record_holdout_result`, and even the SUT-execution tools. Reads execution results via the iteration buffer; emits findings via `record_iteration`.
+   - `gauntlet-holdout-evaluator` — allowlist includes `get_weapon` and `record_holdout_result`. Excludes `read_iteration_records` so prior Attacker/Inspector traces cannot leak in. Runs from fresh context per weapon.
+
+   These allowlists are enforced by Claude Code's permission layer before the MCP server sees a call; a subagent that tries to use a forbidden tool fails at the permission check. This is structural enforcement of the split, not prompt discipline.
+
+2. **Schema enforcement at the buffer.** `record_iteration` rejects any `IterationRecord` whose findings carry a non-null `violated_blocker`. The Inspector never sees blocker text, so a populated value would mean a contamination event.
+
+The Orchestrator role (the host skill itself) retains every tool but is responsible for not paraphrasing blockers back into Attacker/Inspector dispatch prompts. That is the only remaining discipline-level rule, and it is bounded — the Orchestrator only reads `get_weapon` output if it explicitly asks for it, which it should not need to do.
+
+A documented single-host fallback mode (no subagent dispatch) is available for environments that do not support subagents; in that mode the entire split degrades to prompt discipline, as in earlier versions of the skill.
 
 ## Host-driven loop shape
 
 ```
-(host agent in a Claude Code session)
+(Orchestrator: host agent in a Claude Code session, runs the gauntlet skill)
 │
-├── Orchestrator context:
-│     list_weapons() → pick a weapon
-│     list_targets() → pick a target
-│     assess_weapon(id, target) → optional preflight
-│     default_iteration_specs() → reference ladder
+├── list_weapons() → pick weapons
+│   list_targets() → pick targets
+│   assess_weapon(id, target) → optional preflight
+│   default_iteration_specs() → reference ladder
+│   start_run(weapon_ids=[...]) → run_id
 │
-├── For each iteration spec (typically 4):
-│   ├── Attacker context:
-│   │     generate Plan(s) from spec + prior findings
-│   │     (never reads blockers)
+├── For each weapon, for each iteration spec (typically 4):
+│   ├── dispatch gauntlet-attacker subagent (run_id, weapon_id, spec, url)
+│   │     → composes plans, executes them, appends IterationRecord
 │   │
-│   ├── Orchestrator context:
-│   │     execute_plan(url, plan) → ExecutionResult
-│   │
-│   └── Inspector context:
-│         analyze ExecutionResult(s) → Finding(s)
-│         (never reads blockers)
+│   └── dispatch gauntlet-inspector subagent (run_id, weapon_id, spec)
+│         → reads buffer, emits Findings, appends IterationRecord (findings only)
 │
-├── HoldoutEvaluator context:
-│     get_weapon(id) → full Weapon (with blockers)
-│     derive acceptance plans from blockers
-│     execute_plan(url, plan) per holdout plan → ExecutionResult
+├── For each weapon, dispatch gauntlet-holdout-evaluator subagent (run_id, weapon_id, url)
+│     → fresh context, reads weapon blockers, derives acceptance plans,
+│       executes them, appends one HoldoutResult per blocker
 │
-└── Orchestrator context:
-      assemble_run_report(iterations, holdout_results) → RiskReport + Clearance
+└── For each weapon: assemble_run_report(run_id, weapon_id) → RiskReport + Clearance
 ```
 
 ## Deterministic vs non-deterministic segments
