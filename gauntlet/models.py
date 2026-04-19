@@ -31,6 +31,17 @@ class Assertion(GauntletModel):
 class PlanStep(GauntletModel):
     user: str
     request: HttpRequest
+    extract: dict[str, str] = Field(default_factory=dict)
+    """Map from template-variable name to JSONPath-ish response body key.
+
+    Each entry captures a value from this step's response and writes it to the
+    Drone's path-template context for subsequent steps. Values are simple
+    dotted keys into ``response.body`` (e.g. ``id`` or ``data.id``); no
+    jmespath, no wildcards. Missing paths are silently skipped.
+
+    Example: ``extract={"order_id": "id"}`` on a ``POST /orders`` step makes
+    ``{order_id}`` available to later steps' paths.
+    """
 
 
 class Plan(GauntletModel):

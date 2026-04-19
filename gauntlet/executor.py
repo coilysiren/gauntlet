@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .http import HttpApi
 from .models import (
     Assertion,
@@ -7,7 +9,10 @@ from .models import (
     ExecutionResult,
     ExecutionStepResult,
     Plan,
+    PlanStep,
 )
+
+_MISSING = object()
 
 
 class Drone:
@@ -28,8 +33,7 @@ class Drone:
                     response=response,
                 )
             )
-            if request.method == "POST" and request.path == "/tasks" and "id" in response.body:
-                context["task_id"] = response.body["id"]
+            _apply_extractions(step, response.body, context)
 
         assertion_results = [
             _evaluate_assertion(assertion, step_results) for assertion in plan.assertions
@@ -41,6 +45,45 @@ class Drone:
             steps=step_results,
             assertions=assertion_results,
         )
+
+
+def _apply_extractions(step: PlanStep, body: dict[str, Any], context: dict[str, object]) -> None:
+    """Write template-variable captures from ``body`` into ``context``.
+
+    Generic ``step.extract`` entries are applied first. The ``/tasks`` →
+    ``task_id`` shortcut is a legacy-compat carve-out for plans written before
+    ``extract`` existed; new plans should set ``extract={"task_id": "id"}``
+    explicitly instead of relying on the hardcoded path match.
+    """
+    for var_name, body_path in step.extract.items():
+        value = _lookup_dotted(body, body_path)
+        if value is not _MISSING:
+            context[var_name] = value
+
+    # Legacy backward-compat: pre-``extract`` plans that POST to /tasks used to
+    # auto-populate {task_id}. Only kick in when the caller didn't opt into
+    # explicit extraction, so new plans retain full control.
+    if (
+        not step.extract
+        and step.request.method == "POST"
+        and step.request.path == "/tasks"
+        and "id" in body
+    ):
+        context["task_id"] = body["id"]
+
+
+def _lookup_dotted(body: dict[str, Any], path: str) -> Any:
+    """Return the value at ``path`` inside ``body`` or ``_MISSING``.
+
+    ``path`` is a dotted key like ``id`` or ``data.id``. Any missing segment
+    or non-dict traversal short-circuits to ``_MISSING``.
+    """
+    current: Any = body
+    for segment in path.split("."):
+        if not isinstance(current, dict) or segment not in current:
+            return _MISSING
+        current = current[segment]
+    return current
 
 
 def _evaluate_assertion(
