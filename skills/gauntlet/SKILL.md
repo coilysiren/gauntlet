@@ -23,7 +23,7 @@ The Attacker and Inspector subagents cannot call `get_weapon` even if their prom
 ## Prerequisites
 
 - The Gauntlet plugin is installed; the MCP server is registered. Confirm with `/mcp` (should list `gauntlet` and its tools) and `/agents` (should list `gauntlet-attacker`, `gauntlet-inspector`, `gauntlet-holdout-evaluator`).
-- The project has a `.gauntlet/` directory with at least one weapon YAML. If missing, tell the user and stop — or, if the user has a product spec, suggest the `gauntlet-author` skill to generate weapons first.
+- The project has a `.gauntlet/` directory with at least one weapon YAML. If missing, tell the user and stop — or, if the user has a product spec, dispatch the `gauntlet-author` skill (also shipped in this plugin) to generate weapons first.
 - A running SUT whose URL the host can reach. If the user hasn't named a URL, ask.
 - Existing tests pass. Gauntlet is the final check, not a first-pass linter.
 

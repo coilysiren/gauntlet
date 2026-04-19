@@ -36,6 +36,7 @@ On first invocation, `uv` auto-resolves the Python dependencies for the MCP serv
 
 - **MCP server `gauntlet`** — the deterministic tools listed below.
 - **Skill `gauntlet`** — auto-loads on trigger phrases ("run gauntlet", "adversarial test", "check before merging") and walks the host through the role-disciplined loop as the Orchestrator.
+- **Skill `gauntlet-author`** — auto-loads on trigger phrases ("author weapons from this spec", "generate gauntlet weapons", "propose weapons for this API") and translates a product spec into Weapon YAMLs in `.gauntlet/weapons/`.
 - **Subagents `gauntlet-attacker`, `gauntlet-inspector`, `gauntlet-holdout-evaluator`** — per-role definitions with MCP-tool allowlists that enforce the train/test split at the permission layer. The Orchestrator dispatches them; they cannot reach the tools their role is forbidden from using.
 
 Without the skill, a host could still call the MCP tools ad-hoc, but it would have to re-derive the loop every time and would be far more likely to collapse the train/test split. The plugin delivery is what makes the four pieces stay in sync.

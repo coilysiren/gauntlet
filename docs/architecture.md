@@ -46,6 +46,21 @@ models + auth + openapi + roles + executor + loop + adapters + runs  ←  server
 
 Nothing imports from `server.py`. The MCP entry point (`main()` in `server.py`) runs `FastMCP.run()` which speaks stdio to the Claude Code process that launched it.
 
+### Plugin layout
+
+```
+.claude-plugin/plugin.json       # MCP server registration + plugin manifest
+agents/                          # per-role subagent definitions
+├── gauntlet-attacker.md
+├── gauntlet-inspector.md
+└── gauntlet-holdout-evaluator.md
+skills/                          # host-side skills
+├── gauntlet/SKILL.md            # the Orchestrator loop
+└── gauntlet-author/SKILL.md     # spec → weapons authoring skill
+```
+
+The skills are pure prose (no executable code); they encode role discipline that the host follows when dispatching MCP calls and subagents.
+
 ## MCP tool surface
 
 | Tool | Returns | Side effect |
