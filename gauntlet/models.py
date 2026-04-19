@@ -85,20 +85,6 @@ class Plan(GauntletModel):
     weapon_id: str | None = None
 
 
-class NaturalLanguagePlan(GauntletModel):
-    """A plan described in plain English; interpreted at runtime by a
-    ``NaturalLanguageEvaluator`` rather than pre-defined as structured steps.
-
-    No glue code, no schema maintenance — the evaluator plans its own request
-    sequence from ``description`` and judges the outcome against ``verdict``.
-    """
-
-    name: str
-    description: str
-    users: list[str]
-    verdict: str
-
-
 class ExecutionStepResult(GauntletModel):
     step_index: int
     user: str
@@ -108,7 +94,7 @@ class ExecutionStepResult(GauntletModel):
 
 class AssertionResult(GauntletModel):
     name: str
-    kind: Literal["status_code", "rule", "verdict"]
+    kind: Literal["status_code", "rule"]
     passed: bool
     detail: str
 
@@ -229,10 +215,10 @@ class Weapon(GauntletModel):
 class Arsenal(GauntletModel):
     """A named collection of Weapons.
 
-    Arsenals group related weapons under a single label so users can
-    select an entire attack surface with one flag.  Example::
-
-        gauntlet http://localhost:8000 --arsenal .gauntlet/arsenals/authz.yaml
+    Arsenals group related weapons under a single label so the host can load
+    an entire attack surface in one MCP call.  Pass ``arsenal_path`` to
+    ``list_weapons`` / ``get_weapon`` / ``assess_weapon`` to load from an
+    arsenal file instead of a weapons directory.
 
     An arsenal YAML file contains a ``name`` and a ``weapons`` list.
     """
@@ -245,9 +231,9 @@ class Arsenal(GauntletModel):
 class WeaponAssessment(GauntletModel):
     """Result of a preflight quality check on a Weapon.
 
-    When ``proceed`` is ``False``, the runner returns early without executing
-    any iterations. The ``issues`` list explains why the weapon was rejected;
-    ``suggestions`` offers actionable fixes.
+    When ``proceed`` is ``False``, the host should skip the weapon. The
+    ``issues`` list explains why the weapon was rejected; ``suggestions``
+    offers actionable fixes.
     """
 
     quality_score: float = Field(ge=0.0, le=1.0)

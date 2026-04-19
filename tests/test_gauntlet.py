@@ -1,216 +1,274 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+import yaml
+
 from gauntlet import (
-    DemoAttacker,
-    DemoHoldoutVitals,
-    DemoInspector,
-    DemoNaturalLanguageHoldoutVitals,
-    DemoNaturalLanguageVitals,
+    Assertion,
     DemoWeaponAssessor,
     Drone,
-    GauntletRunner,
     HttpRequest,
     InMemoryHttpApi,
+    IterationRecord,
+    IterationSpec,
+    Plan,
+    PlanStep,
     Target,
     Weapon,
+    build_default_iteration_specs,
+    build_risk_report,
+)
+from gauntlet.server import (
+    assemble_run_report,
+    assess_weapon,
+    default_iteration_specs,
+    get_weapon,
+    list_targets,
+    list_weapons,
+)
+
+# ---------------------------------------------------------------------------
+# Shared authorization probe reused across several tests.
+# ---------------------------------------------------------------------------
+
+_AUTHZ_PLAN = Plan(
+    name="user_cannot_modify_other_users_task",
+    category="authz",
+    goal="cross-user modification should be rejected",
+    steps=[
+        PlanStep(
+            user="userA",
+            request=HttpRequest(method="POST", path="/tasks", body={"title": "private task"}),
+        ),
+        PlanStep(
+            user="userB",
+            request=HttpRequest(method="PATCH", path="/tasks/{task_id}", body={"completed": True}),
+        ),
+        PlanStep(user="userA", request=HttpRequest(method="GET", path="/tasks/{task_id}")),
+    ],
+    assertions=[
+        Assertion(
+            name="unauthorized_patch_blocked",
+            kind="status_code",
+            expected=403,
+            step_index=2,
+        ),
+        Assertion(
+            name="task_not_modified_by_other_user",
+            kind="rule",
+            rule="task_not_modified_by_other_user",
+            step_index=3,
+        ),
+    ],
 )
 
 
-def test_runner_produces_four_iteration_report() -> None:
-    runner = GauntletRunner(
-        executor=Drone(InMemoryHttpApi()),
-        attacker=DemoAttacker(),
-        inspector=DemoInspector(),
-    )
-
-    run = runner.run()
-
-    assert len(run.iterations) == 4
-    assert run.risk_report.risk_level == "critical"
-    assert "unauthorized_cross_user_modification" in run.risk_report.confirmed_failures
-    assert "PATCH /tasks/1" in run.risk_report.coverage
-    assert run.clearance is None  # no holdout evaluator provided
+# ---------------------------------------------------------------------------
+# Drone and assertion evaluation (unchanged deterministic core)
+# ---------------------------------------------------------------------------
 
 
-def test_demo_plan_surfaces_authz_failure() -> None:
-    runner = GauntletRunner(
-        executor=Drone(InMemoryHttpApi()),
-        attacker=DemoAttacker(),
-        inspector=DemoInspector(),
-    )
+def test_drone_executes_authz_plan_and_surfaces_flaw() -> None:
+    result = Drone(InMemoryHttpApi()).run_plan(_AUTHZ_PLAN)
 
-    first_iteration = runner.run().iterations[0]
-    result = first_iteration.execution_results[0]
-
-    assert result.steps[1].response.status_code == 200
+    assert result.steps[1].response.status_code == 200  # seeded flaw
     assert result.assertions[0].passed is False
     assert result.assertions[1].passed is False
-    assert result.satisfaction_score == 0.0  # 0/2 assertions passed
+    assert result.satisfaction_score == 0.0
 
 
-def test_nl_holdout_gate_blocks_failing_api() -> None:
-    """NaturalLanguagePlan path: blockers are parsed from the weapon."""
-    inv = Weapon(
-        title="Users cannot modify each other's tasks",
-        description="The task API must enforce resource ownership.",
-        blockers=["A PATCH by a non-owner is rejected with 403"],
+# ---------------------------------------------------------------------------
+# Risk-report assembly
+# ---------------------------------------------------------------------------
+
+
+def test_build_risk_report_reflects_holdout_failure() -> None:
+    """With zero-satisfaction holdout results and no findings, clearance blocks."""
+    execution = Drone(InMemoryHttpApi()).run_plan(_AUTHZ_PLAN)
+    iteration = IterationRecord(
+        spec=build_default_iteration_specs()[0],
+        plans=[_AUTHZ_PLAN],
+        execution_results=[execution],
+        findings=[],
     )
 
-    runner = GauntletRunner(
-        executor=Drone(InMemoryHttpApi()),
-        attacker=DemoAttacker(),
-        inspector=DemoInspector(),
-        nl_holdout_vitals=DemoNaturalLanguageHoldoutVitals(),
-        nl_vitals=DemoNaturalLanguageVitals(),
-        weapon=inv,
-        clearance_threshold=0.90,
+    report, clearance = build_risk_report([iteration], [execution], clearance_threshold=0.9)
+
+    assert clearance is not None
+    assert clearance.passed is False
+    assert clearance.recommendation == "block"
+    assert report.risk_level == "low"  # no findings means no blocker-level severity
+
+
+def test_build_risk_report_no_holdout_yields_no_clearance() -> None:
+    iteration = IterationRecord(
+        spec=build_default_iteration_specs()[0],
+        plans=[],
+        execution_results=[],
+        findings=[],
     )
-
-    run = runner.run()
-
-    assert len(run.holdout_results) == 1
-    assert run.holdout_results[0].assertions[0].kind == "verdict"
-    assert run.holdout_results[0].satisfaction_score == 0.0
-    assert run.clearance is not None
-    assert run.clearance.recommendation == "block"
+    _, clearance = build_risk_report([iteration], [], clearance_threshold=0.9)
+    assert clearance is None
 
 
-def test_holdout_gate_blocks_failing_api() -> None:
-    inv = Weapon(
-        title="Users cannot modify each other's tasks",
-        description="The task API must enforce resource ownership.",
-        blockers=["A PATCH by a non-owner is rejected with 403"],
-    )
-
-    runner = GauntletRunner(
-        executor=Drone(InMemoryHttpApi()),
-        attacker=DemoAttacker(),
-        inspector=DemoInspector(),
-        holdout_vitals=DemoHoldoutVitals(),
-        weapon=inv,
-        clearance_threshold=0.90,
-    )
-
-    run = runner.run()
-
-    assert run.weapon == inv
-    assert len(run.holdout_results) == 1
-    assert run.holdout_results[0].satisfaction_score == 0.0  # 0/2 assertions passed
-    assert run.clearance is not None
-    assert run.clearance.passed is False
-    assert run.clearance.recommendation == "block"
-    assert run.clearance.holdout_satisfaction_score == 0.0
+# ---------------------------------------------------------------------------
+# Weapon quality assessment
+# ---------------------------------------------------------------------------
 
 
-def test_fail_fast_tier_stops_early_on_critical_finding() -> None:
-    """fail_fast_tier=0 stops after the first iteration when a critical finding appears."""
-    runner = GauntletRunner(
-        executor=Drone(InMemoryHttpApi()),
-        attacker=DemoAttacker(),
-        inspector=DemoInspector(),
-        fail_fast_tier=0,
-    )
-
-    run = runner.run()
-
-    # The demo inspector finds a critical issue in iteration 1 (tier 0),
-    # so the loop should stop there rather than running all four iterations.
-    assert len(run.iterations) == 1
-    assert run.iterations[0].spec.tier == 0
-    assert any(f.severity == "critical" for f in run.iterations[0].findings)
-
-
-def test_preflight_blocks_vague_weapon() -> None:
-    """DemoWeaponAssessor rejects a weapon whose blockers are too short."""
+def test_weapon_assessor_rejects_vague_weapon() -> None:
     vague = Weapon(
         title="Make it secure",
         description="It should be secure.",
-        blockers=["secure", "no bugs"],  # both under 20 chars
+        blockers=["secure", "no bugs"],
     )
-
-    runner = GauntletRunner(
-        executor=Drone(InMemoryHttpApi()),
-        attacker=DemoAttacker(),
-        inspector=DemoInspector(),
-        assessor=DemoWeaponAssessor(),
-        weapon=vague,
-    )
-
-    run = runner.run()
-
-    assert run.iterations == []
-    assert run.weapon_assessment is not None
-    assert run.weapon_assessment.proceed is False
-    assert run.weapon_assessment.quality_score < 0.5
-    assert run.clearance is not None
-    assert run.clearance.recommendation == "block"
+    assessment = DemoWeaponAssessor().assess(vague, None)
+    assert assessment.proceed is False
+    assert assessment.quality_score < 0.5
 
 
-def test_preflight_passes_good_weapon() -> None:
-    """DemoWeaponAssessor accepts a well-formed weapon+target and allows the loop to run."""
+def test_weapon_assessor_accepts_good_weapon() -> None:
     good = Weapon(
         title="Users cannot modify each other's tasks",
         description="The task API must enforce resource ownership.",
         blockers=["A PATCH by a non-owner is rejected with 403"],
     )
     target = Target(title="Task endpoints", endpoints=["PATCH /tasks/{id}"])
-
-    runner = GauntletRunner(
-        executor=Drone(InMemoryHttpApi()),
-        attacker=DemoAttacker(),
-        inspector=DemoInspector(),
-        assessor=DemoWeaponAssessor(),
-        weapon=good,
-        target=target,
-    )
-
-    run = runner.run()
-
-    assert run.weapon_assessment is not None
-    assert run.weapon_assessment.proceed is True
-    assert run.weapon_assessment.quality_score >= 0.5
-    assert len(run.iterations) == 4  # full loop ran
-
-
-def test_run_records_target() -> None:
-    """GauntletRun records the target passed to the runner."""
-    target = Target(title="Task endpoints", endpoints=["POST /tasks", "PATCH /tasks/{id}"])
-    runner = GauntletRunner(
-        executor=Drone(InMemoryHttpApi()),
-        attacker=DemoAttacker(),
-        inspector=DemoInspector(),
-        target=target,
-    )
-    run = runner.run()
-    assert run.target == target
+    assessment = DemoWeaponAssessor().assess(good, target)
+    assert assessment.proceed is True
+    assert assessment.quality_score >= 0.5
 
 
 # ---------------------------------------------------------------------------
-# Deterministic flaw detection tests
+# MCP tool surface
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def weapons_dir(tmp_path: Path) -> Path:
+    d = tmp_path / "weapons"
+    d.mkdir()
+    (d / "ownership.yaml").write_text(
+        yaml.dump(
+            {
+                "id": "resource_ownership_write_isolation",
+                "title": "Users cannot modify each other's tasks",
+                "description": "The task API must enforce resource ownership.",
+                "blockers": ["A PATCH by a non-owner is rejected with 403"],
+            }
+        )
+    )
+    return d
+
+
+def test_list_weapons_omits_blockers(weapons_dir: Path) -> None:
+    briefs = list_weapons(weapons_path=str(weapons_dir))
+    assert len(briefs) == 1
+    brief = briefs[0]
+    assert brief.id == "resource_ownership_write_isolation"
+    assert brief.title == "Users cannot modify each other's tasks"
+    # WeaponBrief has no blockers field — Pydantic enforces this, but belt-and-braces:
+    assert not hasattr(brief, "blockers")
+
+
+def test_get_weapon_returns_full_weapon(weapons_dir: Path) -> None:
+    weapon = get_weapon(
+        weapon_id="resource_ownership_write_isolation",
+        weapons_path=str(weapons_dir),
+    )
+    assert weapon.blockers == ["A PATCH by a non-owner is rejected with 403"]
+
+
+def test_get_weapon_raises_on_unknown_id(weapons_dir: Path) -> None:
+    with pytest.raises(ValueError, match="No weapon"):
+        get_weapon(weapon_id="nonexistent", weapons_path=str(weapons_dir))
+
+
+def test_list_targets_reads_yaml_dir(tmp_path: Path) -> None:
+    targets_dir = tmp_path / "targets"
+    targets_dir.mkdir()
+    (targets_dir / "task_endpoints.yaml").write_text(
+        yaml.dump(
+            {
+                "title": "Task endpoints",
+                "endpoints": ["POST /tasks", "PATCH /tasks/{id}"],
+            }
+        )
+    )
+    targets = list_targets(targets_path=str(targets_dir))
+    assert len(targets) == 1
+    assert targets[0].endpoints == ["POST /tasks", "PATCH /tasks/{id}"]
+
+
+def test_list_targets_returns_empty_when_missing(tmp_path: Path) -> None:
+    assert list_targets(targets_path=str(tmp_path / "does-not-exist")) == []
+
+
+def test_assess_weapon_via_mcp_surface(weapons_dir: Path) -> None:
+    assessment = assess_weapon(
+        weapon_id="resource_ownership_write_isolation",
+        weapons_path=str(weapons_dir),
+        target=Target(title="Task endpoints", endpoints=["PATCH /tasks/{id}"]),
+    )
+    assert assessment.proceed is True
+
+
+def test_default_iteration_specs_returns_four_stages() -> None:
+    specs = default_iteration_specs()
+    assert [s.name for s in specs] == [
+        "baseline",
+        "boundary",
+        "adversarial_misuse",
+        "targeted_escalation",
+    ]
+
+
+def test_assemble_run_report_shapes_output() -> None:
+    execution = Drone(InMemoryHttpApi()).run_plan(_AUTHZ_PLAN)
+    iteration = IterationRecord(
+        spec=IterationSpec(
+            index=1,
+            name="baseline",
+            goal="baseline",
+            attacker_prompt="",
+            inspector_prompt="",
+        ),
+        plans=[_AUTHZ_PLAN],
+        execution_results=[execution],
+        findings=[],
+    )
+
+    out = assemble_run_report(
+        iterations=[iteration],
+        holdout_results=[execution],
+        clearance_threshold=0.9,
+    )
+
+    assert "risk_report" in out
+    assert "clearance" in out
+    assert out["clearance"] is not None
+    assert out["clearance"]["recommendation"] == "block"
+
+
+# ---------------------------------------------------------------------------
+# Seeded deterministic flaws in the in-memory demo API
 # ---------------------------------------------------------------------------
 
 
 def test_flaw_validation_accepts_invalid_title_type() -> None:
-    """POST /tasks accepts a non-string title (e.g. integer) without error.
-
-    A correct API should reject non-string titles with 422.  The seeded flaw
-    silently coerces the value, so the response is 201.
-    """
     api = InMemoryHttpApi()
     resp = api.send(
         "userA",
         HttpRequest(method="POST", path="/tasks", body={"title": 12345}),
     )
     assert resp.status_code == 201
-    # The flaw: title is stored as-is (an int) rather than being rejected.
     assert resp.body["title"] == 12345
     assert not isinstance(resp.body["title"], str)
 
 
 def test_flaw_validation_accepts_missing_title() -> None:
-    """POST /tasks succeeds even when the required 'title' field is omitted.
-
-    A correct API should reject the request with 422.  The seeded flaw
-    defaults to an empty string.
-    """
     api = InMemoryHttpApi()
     resp = api.send(
         "userA",
@@ -221,55 +279,27 @@ def test_flaw_validation_accepts_missing_title() -> None:
 
 
 def test_flaw_list_endpoint_leaks_across_users() -> None:
-    """GET /tasks returns tasks belonging to ALL users, not just the requester.
-
-    A correct API should filter the list to only the requesting user's tasks.
-    The seeded flaw returns every task regardless of ownership.
-    """
     api = InMemoryHttpApi()
+    api.send("userA", HttpRequest(method="POST", path="/tasks", body={"title": "secret A"}))
+    api.send("userB", HttpRequest(method="POST", path="/tasks", body={"title": "secret B"}))
 
-    # userA creates a task
-    api.send(
-        "userA",
-        HttpRequest(method="POST", path="/tasks", body={"title": "secret A"}),
-    )
-    # userB creates a task
-    api.send(
-        "userB",
-        HttpRequest(method="POST", path="/tasks", body={"title": "secret B"}),
-    )
-
-    # userA lists tasks — should only see their own, but the flaw leaks all.
     resp = api.send("userA", HttpRequest(method="GET", path="/tasks"))
     assert resp.status_code == 200
-    tasks = resp.body["tasks"]
-    owners = {t["owner"] for t in tasks}
-    # The flaw: userA sees userB's task.
+    owners = {t["owner"] for t in resp.body["tasks"]}
     assert "userB" in owners
-    assert len(tasks) == 2
+    assert len(resp.body["tasks"]) == 2
 
 
 def test_flaw_patch_without_ownership_check() -> None:
-    """PATCH /tasks/{id} allows any user to modify another user's task.
-
-    This is the original seeded flaw. A correct API should return 403.
-    """
     api = InMemoryHttpApi()
     resp = api.send(
         "userA",
         HttpRequest(method="POST", path="/tasks", body={"title": "owned by A"}),
     )
     task_id = resp.body["id"]
-
-    # userB patches userA's task — should be 403 but the flaw allows 200.
     patch_resp = api.send(
         "userB",
-        HttpRequest(
-            method="PATCH",
-            path=f"/tasks/{task_id}",
-            body={"title": "hijacked"},
-        ),
+        HttpRequest(method="PATCH", path=f"/tasks/{task_id}", body={"title": "hijacked"}),
     )
     assert patch_resp.status_code == 200
-    assert patch_resp.body["title"] == "hijacked"
     assert patch_resp.body["last_modified_by"] == "userB"

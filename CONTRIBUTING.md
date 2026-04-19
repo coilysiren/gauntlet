@@ -7,7 +7,7 @@ See [docs/development.md](docs/development.md) for full setup instructions. The 
 ```bash
 git clone git@github.com:coilysiren/gauntlet.git
 cd gauntlet
-docker compose build
+uv sync
 uv run pre-commit install
 ```
 
@@ -23,8 +23,8 @@ id: my_snake_case_weapon_id
 title: Short human-readable title
 description: >
   Plain-English description of the attack surface. This is shown to the
-  Attacker to guide probe plan generation. Be specific about what API
-  behavior is being tested.
+  host agent's Attacker context (via WeaponBrief). Be specific about what
+  API behavior is being tested.
 blockers:
   - A concrete, externally observable assertion (e.g. "A DELETE by a non-owner is rejected with 403")
   - Another assertion the system must satisfy
@@ -32,21 +32,17 @@ blockers:
 ```
 
 2. The fields map to the `Weapon` model in `gauntlet/models.py`:
-   - `id` -- stable snake_case identifier used to accumulate findings across runs
-   - `title` -- human-readable name
-   - `description` -- given to the Attacker (via `WeaponBrief`); the Attacker never sees `blockers`
-   - `blockers` -- the weapon's Vitals; checked independently by the holdout system to produce a Clearance
+   - `id` — stable snake_case identifier used to accumulate findings across runs
+   - `title` — human-readable name
+   - `description` — exposed via `WeaponBrief` to the host's Attacker context; `blockers` are withheld
+   - `blockers` — the weapon's Vitals; checked by the host's HoldoutEvaluator context to produce a Clearance
 
-3. Quality guidelines (enforced by `WeaponAssessor` in `gauntlet/roles.py`):
+3. Quality guidelines (enforced by `DemoWeaponAssessor` in `gauntlet/roles.py`):
    - Each blocker should be at least 20 characters
    - Include expected HTTP status codes in blockers (e.g. "rejected with 403")
    - Specify target endpoints so the assessor does not penalize the weapon
 
-4. Test your weapon by running the full loop against a live API:
-
-```bash
-gauntlet http://localhost:8000 --weapon .gauntlet/weapons/my_new_weapon.yaml --target .gauntlet/targets/
-```
+4. Test your weapon by exercising the MCP server from a Claude Code session — the host calls `assess_weapon` and `execute_plan` against a live SUT.
 
 ## How to add a new adapter
 
@@ -81,18 +77,21 @@ class Adapter(Protocol):
 
 Place your adapter module in `gauntlet/adapters/` and re-export it from `gauntlet/adapters/__init__.py` by adding it to the imports and `__all__` list.
 
-## How to add a new role
+## How to add a new MCP tool
 
-Roles are defined as Python `Protocol` classes in `gauntlet/roles.py`. The existing roles are:
+MCP tools live in `gauntlet/server.py`. Each tool is a decorated function:
 
-| Role | Method | Purpose |
-|---|---|---|
-| `Attacker` | `generate_plans(spec, previous_iterations) -> list[Plan]` | Generates test plans |
-| `Inspector` | `analyze(spec, execution_results) -> list[Finding]` | Analyzes results for findings |
-| `HoldoutVitals` | `acceptance_plans(weapon) -> list[Plan]` | Converts blockers to acceptance plans |
-| `WeaponAssessor` | `assess(weapon, target) -> WeaponAssessment` | Preflight quality check on weapons |
+```python
+@mcp.tool()
+def my_new_tool(arg: str) -> SomeModel:
+    """One-line summary, followed by a body explaining when the host should call this
+    and any host-discipline constraints (e.g. 'read only in the Inspector context')."""
+    ...
+```
 
-To implement a new variant of an existing role, create a class that satisfies the protocol. No base class inheritance is needed -- just match the method signature.
+Tool inputs and outputs should be Pydantic models from `models.py` (or a primitive type). FastMCP generates the JSON Schema automatically from the type hints. Keep the tool surface minimal — one tool per deterministic operation the host cannot do on its own.
+
+Add test coverage in `tests/test_gauntlet.py` by calling the tool function directly — it's just a Python function decorated with `@mcp.tool()`.
 
 ## Running tests
 
@@ -125,7 +124,5 @@ All code must pass `ruff check` and `ruff format --check` with no errors. Type a
 |---|---|---|
 | New weapon | YAML file in `.gauntlet/weapons/` | `id`, `title`, `description`, `blockers` fields |
 | New adapter | Python module in `gauntlet/adapters/` | `Adapter` protocol: `send()` + `execute()` |
-| New attacker | Python class anywhere | `Attacker` protocol: `generate_plans(spec, previous_iterations) -> list[Plan]` |
-| New inspector | Python class anywhere | `Inspector` protocol: `analyze(spec, execution_results) -> list[Finding]` |
-| New holdout vitals | Python class anywhere | `HoldoutVitals` protocol: `acceptance_plans(weapon) -> list[Plan]` |
+| New MCP tool | `@mcp.tool()` function in `gauntlet/server.py` | Typed Python function; Pydantic in/out |
 | New weapon assessor | Python class anywhere | `WeaponAssessor` protocol: `assess(weapon, target) -> WeaponAssessment` |

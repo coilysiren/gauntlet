@@ -1,127 +1,63 @@
 # ⚡🔄🛂 Gauntlet
 
-Gauntlet is a two-agent adversarial loop that infers software correctness by observing how code behaves under sustained, targeted attack. It's designed as quality control for a dark factory environment — where code is written by bots and verified by attack.
+Gauntlet is a two-role adversarial MCP server that infers software correctness by observing how code behaves under sustained, targeted attack. It's designed as quality control for a dark-factory environment - where code is written by bots and verified by attack.
 
-The name comes from "running the gauntlet": a challenge where you must survive a sustained barrage from all sides. Here, the Inspector drives the system under test through escalating tiers of adversarial pressure until hidden failure modes become detectable — then gates promotion on whether any signal came through.
+The name comes from "running the gauntlet": a challenge where you must survive a sustained barrage from all sides. Here, the host Claude Code agent drives the system under test through escalating tiers of adversarial pressure until hidden failure modes become detectable - then gates promotion on whether any signal came through.
 
-AI-written code can look correct — following conventions, passing linting, reading plausibly — while hiding behavioral failures that only surface under real use. Traditional tests don't catch this because the same agent that wrote the code also wrote the tests, sharing the same blind spots. Gauntlet is built for this: the Inspector assumes the code is broken and generates plans the code author never considered, and the `blockers` in each Weapon are never shown to the Attacker, preserving a real train/test split that prevents the agent from inadvertently writing code that passes by knowing what the tests check.
+AI-written code can look correct - following conventions, passing linting, reading plausibly - while hiding behavioral failures that only surface under real use. Traditional tests don't catch this because the same agent that wrote the code also wrote the tests, sharing the same blind spots. Gauntlet is built for this: the host's Attacker context assumes the code is broken and generates plans the code author never considered, and the `blockers` in each Weapon are never loaded into that context, preserving a real train/test split that prevents the agent from inadvertently writing code that passes by knowing what the tests check.
 
-> An **Attacker** uses a **Weapon** aimed at a **Target** to generate **Plans**. A **Drone** executes those Plans as a **User**. An **Inspector** watches and surfaces **Findings**. Hidden **Vitals** — externally observable truths about expected system behavior — are checked independently to produce a **Clearance**.
+> An **Attacker** uses a **Weapon** aimed at a **Target** to generate **Plans**. Gauntlet's Drone executes those Plans as a **User**. An **Inspector** watches and surfaces **Findings**. Hidden **Vitals** - externally observable truths about expected system behavior - are checked independently to produce a **Clearance**.
 
-## Quick start
+## Operating model
 
-Set your LLM credentials, then point Gauntlet at a running API:
+Gauntlet runs **exclusively as an MCP server inside Claude Code**. There is no CLI, no remote CI mode, and no standalone invocation path. The host Claude Code agent plays the Attacker and Inspector roles itself - two prompt contexts it drives in its own loop - and calls Gauntlet's MCP tools for the deterministic pieces: config loading, plan execution against the SUT, weapon assessment, and risk-report assembly.
 
-```bash
-export GAUNTLET_ATTACKER_TYPE=openai
-export GAUNTLET_ATTACKER_KEY=sk-...
-export GAUNTLET_INSPECTOR_TYPE=anthropic
-export GAUNTLET_INSPECTOR_KEY=sk-ant-...
+Because Gauntlet runs inside a Claude Code session, no Anthropic credentials are needed - the host already has auth.
 
-git clone git@github.com:coilysiren/gauntlet.git
-cd gauntlet
-docker compose run --rm demo
-```
-
-That starts the demo API and runs the full adversarial loop against it.
-
-## Installation
+## Install and register
 
 ```bash
-pip install gauntlet
-# or: uv add gauntlet
+uv add gauntlet     # or: pip install gauntlet
+claude mcp add gauntlet -- uv run gauntlet-mcp
 ```
 
-## Usage
+Once registered, Claude Code will expose the `gauntlet` MCP server to any session in that project. Confirm it is discovered with `/mcp` inside Claude Code.
 
-For workflow guidance (when to run, how to integrate, how to act on results), see [docs/usage.md](docs/usage.md).
+## MCP tools
 
-### LLM configuration
-
-Gauntlet requires one LLM for the Attacker role and one for the Inspector role. Configure
-each with a pair of environment variables:
-
-| Variable | Description |
-|---|---|
-| `GAUNTLET_ATTACKER_TYPE` | LLM provider for the Attacker: `openai` or `anthropic` |
-| `GAUNTLET_ATTACKER_KEY` | API key for the Attacker's provider |
-| `GAUNTLET_INSPECTOR_TYPE` | LLM provider for the Inspector: `openai` or `anthropic` |
-| `GAUNTLET_INSPECTOR_KEY` | API key for the Inspector's provider |
-
-The default models are `gpt-4o` for OpenAI and `claude-opus-4-5` for Anthropic.
-
-Two valid configurations:
-
-- **Cross-provider (recommended for CI and standalone runs).** Attacker and Inspector on different providers. Model diversity reduces shared blind spots. This is the default posture.
-- **Single-provider (recommended for agentic-loop consumers).** Both roles on the same provider. Appropriate when the consumer is an orchestrator running against a single subscription (e.g., a dark-factory-style pipeline running entirely within one Claude Code auth context). Simpler integration, one credential, one MCP surface. Trades some blind-spot coverage for integration simplicity.
-
-### CLI
-
-```
-gauntlet [url] [--config FILE] [--arsenal FILE] [--weapon FILE_OR_DIR] [--target FILE_OR_DIR] [--openapi FILE] [--users FILE] [--threshold N] [--no-fail-fast] [--format yaml|json]
-```
-
-| Argument | Default | Description |
+| Tool | Purpose | Use in host role |
 |---|---|---|
-| `url` | from config or required | Base URL of the running API |
-| `--config` | `.gauntlet/config.yaml` | Path to a YAML config file; CLI flags override config values |
-| `--arsenal` | none | Path to an Arsenal YAML file (a named collection of weapons) |
-| `--weapon` | `.gauntlet/weapons` | Path to a [Weapon YAML](#weapons) file, or a directory of YAML files (one weapon per file) |
-| `--target` | `.gauntlet/targets` | Path to a [Target YAML](#targets) file, or a directory of YAML files (one target per file) |
-| `--openapi` | none | Path to an OpenAPI 3.x YAML/JSON spec; auto-generates Target objects |
-| `--users` | `.gauntlet/users.yaml` | Path to an [users YAML](#user-authentication) file |
-| `--threshold` | `0.90` | Holdout satisfaction score required to recommend merge |
-| `--fail-fast` / `--no-fail-fast` | enabled | Stop at the first critical finding; use `--no-fail-fast` to run all iterations |
-| `--format` | `yaml` | Output format for the run report: `yaml` or `json` |
+| `list_weapons(weapons_path, arsenal_path)` | List attacker-safe `WeaponBrief`s (no blockers) | Attacker |
+| `get_weapon(weapon_id, ...)` | Return full weapon including blockers | HoldoutEvaluator only |
+| `list_targets(targets_path, openapi_path)` | List configured `Target` surfaces | Attacker |
+| `execute_plan(url, plan, users_path)` | Deterministically run a `Plan` against the SUT | Attacker + HoldoutEvaluator |
+| `assess_weapon(weapon_id, target, ...)` | Preflight quality check on a weapon | Orchestrator |
+| `assemble_run_report(iterations, holdout_results, clearance_threshold)` | Build final `RiskReport` + `Clearance` | Orchestrator |
+| `default_iteration_specs()` | Return the reference 4-stage escalation ladder | Orchestrator |
 
-```bash
-gauntlet http://localhost:8000
-gauntlet http://localhost:8000 --no-fail-fast
-gauntlet http://localhost:8000 --openapi openapi.yaml
-gauntlet http://localhost:8000 --arsenal .gauntlet/arsenal.yaml
-gauntlet http://localhost:8000 --format json
-gauntlet --config .gauntlet/config.yaml
-```
+The train/test split is maintained by host-side prompt discipline: only `list_weapons` is safe to read in the Attacker context. Pulling full weapons via `get_weapon` inside the Attacker context collapses the split and invalidates the run.
 
-Output defaults to YAML; pass `--format json` for machine-friendly JSON:
+## Project config directory
 
-```yaml
-risk_report:
-  confidence_score: 0.06
-  risk_level: critical
-  confirmed_failures:
-    - unauthorized_cross_user_modification   # userB rewrote userA's task
-  coverage:
-    - GET /tasks/42
-    - PATCH /tasks/42
-    - POST /tasks
-  conclusion: >-
-    System fails under adversarial pressure and should not be promoted
-    without remediation.
-```
-
-### Project config directory
-
-Place your Gauntlet config files in a `.gauntlet/` directory at the root of your project.
-The CLI discovers them automatically — no flags needed for the common case:
+Gauntlet reads configuration from a `.gauntlet/` directory at the root of the project:
 
 ```
 your-project/
 ├── .gauntlet/
-│   ├── weapons/            # one YAML file per Weapon — all loaded automatically
+│   ├── weapons/           # one YAML file per Weapon
 │   │   ├── task_ownership.yaml
 │   │   └── task_read_isolation.yaml
-│   ├── targets/            # one YAML file per Target — all loaded automatically
+│   ├── targets/           # one YAML file per Target
 │   │   └── task_endpoints.yaml
-│   └── users.yaml         # User auth — loaded automatically if present
+│   └── users.yaml         # optional: per-user auth credentials
 └── ...
 ```
 
-Override any path with `--weapon FILE_OR_DIR`, `--target FILE_OR_DIR`, or `--users FILE`.
+Every MCP tool that reads config accepts an override path argument.
 
 ### Weapons
 
-A Weapon defines a reusable attack strategy. The `blockers` are the Weapon's **Vitals** — externally observable truths about expected system behavior — never shown to the Attacker, preserving the train/test separation.
+A Weapon defines a reusable attack strategy. The `blockers` are the Weapon's **Vitals** - externally observable truths about expected system behavior - never surfaced in the Attacker context, preserving the train/test separation.
 
 ```yaml
 # .gauntlet/weapons/task_ownership.yaml
@@ -138,7 +74,6 @@ blockers:
 ### Targets
 
 A Target defines the API surface a Weapon is tested against. One target per YAML file.
-Point multiple targets at the same weapon to test the same attack across different API surfaces.
 
 ```yaml
 # .gauntlet/targets/task_endpoints.yaml
@@ -151,20 +86,18 @@ endpoints:
 
 ### User authentication
 
-Create `.gauntlet/users.yaml` to provide per-user credentials. Secret values are
-never stored in the file — each entry names an environment variable that holds the
-actual credential. Users omitted from the file fall back to the default `X-User: <name>` header.
+Create `.gauntlet/users.yaml` to provide per-user credentials. Secret values are never stored in the file - each entry names an environment variable that holds the actual credential. Users omitted from the file fall back to the default `X-User: <name>` header.
 
 ```yaml
 # .gauntlet/users.yaml
 users:
   alice:
     type: bearer
-    token_env: ALICE_TOKEN       # export ALICE_TOKEN=eyJ...
+    token_env: ALICE_TOKEN
   bob:
     type: api_key
     header: X-API-Key
-    key_env: BOB_API_KEY         # export BOB_API_KEY=sk-...
+    key_env: BOB_API_KEY
 ```
 
 Supported authentication types:
@@ -174,13 +107,33 @@ Supported authentication types:
 | `bearer` | `token_env` | `Authorization: Bearer <$token_env>` |
 | `api_key` | `header`, `key_env` | `<header>: <$key_env>` |
 
+### Arsenals
+
+An Arsenal is a named collection of weapons bundled in a single YAML file - useful for selecting an entire attack class (authorization, input validation, OWASP top-10) as a unit.
+
+```yaml
+# .gauntlet/authz_arsenal.yaml
+name: authz
+description: Authorization and ownership enforcement weapons
+weapons:
+  - id: identity_swap
+    title: Users cannot access or modify each other's resources
+    description: >
+      The API must enforce resource ownership at every endpoint.
+    blockers:
+      - A write request by a non-owner is rejected with 403 or 404
+      - A read request by a non-owner returns 403 or 404
+```
+
+Pass `arsenal_path` to `list_weapons` / `get_weapon` / `assess_weapon` to load from an arsenal file.
+
 ## Core Model
 
 Gauntlet treats code change correctness as a problem of behavioral observation while under attack.
 
-* Code is assumed to be untrusted, potentially written but a human - but designed to be written by a bot
-* Tests are generated dynamically
-* Confidence emerges from what survives adversarial probing
+- Code is assumed untrusted, potentially written by a human but designed to be written by a bot
+- Tests are generated dynamically by the host agent
+- Confidence emerges from what survives adversarial probing
 
 It asks: "How hard did we try to break this, and what happened when we did?"
 
@@ -188,31 +141,31 @@ It asks: "How hard did we try to break this, and what happened when we did?"
 
 ### The Attacker
 
-Explores the execution space
+Explores the execution space.
 
-* Constructs plausible, production-like plans
-* Simulates how the system will actually be used (and misused)
-* Explores workflows, edge cases, and state transitions
-* Adapts based on what has already been tested
+- Constructs plausible, production-like plans
+- Simulates how the system will actually be used (and misused)
+- Explores workflows, edge cases, and state transitions
+- Adapts based on what has already been tested
 
 The Attacker is not trying to prove correctness. It is trying to create situations where correctness might fail.
 
 ### The Inspector
 
-Applies intelligent pressure
+Applies intelligent pressure.
 
-* Analyzes execution results for weaknesses
-* Identifies suspicious passes and untested assumptions
-* Forms hypotheses about hidden failure modes
-* Forces the next round of plans toward likely breakpoints
+- Analyzes execution results for weaknesses
+- Identifies suspicious passes and untested assumptions
+- Forms hypotheses about hidden failure modes
+- Forces the next round of plans toward likely breakpoints
 
 The Inspector assumes "This system is broken. I just haven't proven it yet."
 
 ### Dynamic Between Them
 
-* The Attacker explores
-* The Inspector sharpens
-* Execution grounds both
+- The Attacker explores
+- The Inspector sharpens
+- Execution grounds both
 
 Together, they perform a form of guided adversarial search over the space of possible failures.
 
@@ -220,21 +173,21 @@ Together, they perform a form of guided adversarial search over the space of pos
 
 Gauntlet is not:
 
-* a test runner
-* a code reviewer
-* a fuzzing tool
+- a test runner
+- a code reviewer
+- a fuzzing tool
 
 It is an adversarial inference engine for software correctness.
 
 It combines:
 
-* dynamic plan generation (like red teaming)
-* execution grounding (like CI)
-* adversarial refinement (like security testing)
+- dynamic plan generation (like red teaming)
+- execution grounding (like CI)
+- adversarial refinement (like security testing)
 
 ## Prior Art
 
-These projects occupy the same space — adversarial testing of running services.
+These projects occupy the same space - adversarial testing of running services.
 
 ### [RESTler](https://github.com/microsoft/restler-fuzzer)
 
@@ -242,20 +195,20 @@ Stateful REST API fuzzer from Microsoft Research. RESTler generates and executes
 
 Shared ground: attacks a **running HTTP server** with **multi-step request sequences**, finds bugs that only manifest through specific request orderings, and checks for both security and reliability failures.
 
-Architectural divergence: RESTler uses grammar-based fuzzing derived from the OpenAPI spec, not LLM reasoning. Validation is hardcoded checkers (status codes, schema conformance), not an Inspector that reasons about what looks suspicious. There is no train/test split — all validation rules are visible to the generation logic. Output is boolean pass/fail per sequence, not a probabilistic confidence score.
+Architectural divergence: RESTler uses grammar-based fuzzing derived from the OpenAPI spec, not LLM reasoning. Validation is hardcoded checkers (status codes, schema conformance), not an Inspector that reasons about what looks suspicious. There is no train/test split - all validation rules are visible to the generation logic. Output is boolean pass/fail per sequence, not a probabilistic confidence score.
 
 ### [Schemathesis](https://github.com/schemathesis/schemathesis)
 
 Property-based API testing built on the Hypothesis framework. Generates thousands of test cases from OpenAPI/GraphQL schemas and executes them against a live API to find crashes, schema violations, and stateful workflow bugs.
 
-Shared ground: tests a **live running API**, supports **stateful multi-step workflows** where earlier requests create resources consumed by later ones, and is deliberately **adversarial** — generating edge cases, boundary conditions, and invalid inputs to break the API.
+Shared ground: tests a **live running API**, supports **stateful multi-step workflows** where earlier requests create resources consumed by later ones, and is deliberately **adversarial** - generating edge cases, boundary conditions, and invalid inputs to break the API.
 
-Architectural divergence: generation is algorithmic (property-based testing), not LLM-driven. There is no Attacker/Inspector separation — generation and validation are unified. No hidden blockers or train/test split. Results are deterministic pass/fail, not probabilistic confidence.
+Architectural divergence: generation is algorithmic (property-based testing), not LLM-driven. There is no Attacker/Inspector separation - generation and validation are unified. No hidden blockers or train/test split. Results are deterministic pass/fail, not probabilistic confidence.
 
 ### [ToolFuzz](https://github.com/eth-sri/ToolFuzz)
 
 LLM-powered fuzzer from ETH Zurich that generates natural-language test prompts and executes them against LLM agent tools, detecting both runtime crashes and semantic correctness failures.
 
-Shared ground: **uses LLMs to generate adversarial inputs** and has **separate generation and evaluation phases** — prompts are generated, executed against the target, and then an LLM judges whether outputs are semantically correct. This is the closest architectural parallel to the Attacker/Drone/Inspector pipeline.
+Shared ground: **uses LLMs to generate adversarial inputs** and has **separate generation and evaluation phases** - prompts are generated, executed against the target, and then an LLM judges whether outputs are semantically correct. This is the closest architectural parallel to the host's Attacker/Inspector roles plus Gauntlet's deterministic execution layer.
 
-Architectural divergence: targets LLM agent tools (LangChain, Composio) rather than arbitrary HTTP APIs. No hidden blockers or train/test split — the evaluator sees all context. Attacks are individual prompts, not multi-step chained API call sequences. No probabilistic confidence scoring.
+Architectural divergence: targets LLM agent tools (LangChain, Composio) rather than arbitrary HTTP APIs. No hidden blockers or train/test split - the evaluator sees all context. Attacks are individual prompts, not multi-step chained API call sequences. No probabilistic confidence scoring.

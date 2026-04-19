@@ -19,11 +19,15 @@ You have full read access to files within `/Users/kai/projects/coilysiren`.
 
 Developer reference for agents and humans working on this codebase.
 
+## Operating model
+
+Gauntlet runs **exclusively as an MCP server inside Claude Code**. There is no CLI, no standalone invocation. The host Claude Code agent plays the Attacker and Inspector roles; Gauntlet exposes deterministic tools (config loading, plan execution, risk-report assembly) via `gauntlet/server.py`. No Anthropic/OpenAI credentials are needed — the host provides auth.
+
 ## Docs
 
-- [Architecture](docs/architecture.md) — module map, key abstractions, data flow, design decisions
+- [Architecture](docs/architecture.md) — module map, MCP tool surface, train/test split, design decisions
 - [Development](docs/development.md) — setup, tests, linting, Docker, CI
-- [Usage](docs/usage.md) — workflow runbook: when to run, how to integrate, how to act on results
+- [Usage](docs/usage.md) — host runbook: the driven loop, interpreting results
 
 ## Git workflow
 

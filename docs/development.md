@@ -12,36 +12,37 @@
 ```bash
 git clone git@github.com:coilysiren/gauntlet.git
 cd gauntlet
-docker compose build
+uv sync
 uv run pre-commit install  # install git hooks
 ```
 
-## Running the demo
+## Running the MCP server locally
 
 ```bash
-docker compose run --rm demo
+uv run gauntlet-mcp
 ```
 
-Starts the demo API (`demo_api/server.py`) and runs `gauntlet` against it.
-Outputs a full `GauntletRun` as YAML. The demo API has a seeded authorization
-flaw — expect `risk_level: critical`.
-
-## Running the full arsenal locally
+This speaks stdio. To exercise it from Claude Code, register it:
 
 ```bash
-./scripts/run_arsenal.py
+claude mcp add gauntlet -- uv run gauntlet-mcp
 ```
 
-Runs every weapon in `.gauntlet/weapons/` (including the `owasp-` prefixed set) against the
-in-memory demo API. No LLM keys required — uses the deterministic `Demo*`
-classes. The demo API has three seeded flaws:
+Then open a session in this repo and use the `gauntlet` tools under `/mcp`.
 
-1. **PATCH without ownership check** — any user can modify any task
-2. **POST accepts invalid/missing title** — no input validation
-3. **GET /tasks leaks all users' data** — no read isolation
+## Running the demo API
 
-All 13 weapons should produce a `BLOCK` clearance. Exit code 1 means at least
-one weapon found a flaw (expected). Exit code 0 means everything passed.
+```bash
+uv run python demo_api/server.py
+```
+
+Starts the demo API on `http://localhost:8000`. It has three seeded flaws that the weapons in `.gauntlet/weapons/` should surface:
+
+1. **PATCH without ownership check** - any user can modify any task
+2. **POST accepts invalid/missing title** - no input validation
+3. **GET /tasks leaks all users' data** - no read isolation
+
+Point Gauntlet at `http://localhost:8000` from a Claude Code session to exercise the full loop end-to-end.
 
 ## Tests
 
@@ -56,8 +57,7 @@ uv run pytest -m "not docker"
 uv run pytest -m docker
 ```
 
-Coverage is printed to the terminal and written to `coverage.xml` after every run.
-`coverage.xml` is gitignored.
+Coverage is printed to the terminal and written to `coverage.xml` after every run. `coverage.xml` is gitignored.
 
 ## Linting & formatting
 

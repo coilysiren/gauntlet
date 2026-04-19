@@ -56,7 +56,7 @@
   "$id": "https://github.com/coilysiren/gauntlet/schemas/arsenal.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "A named collection of Weapons.\n\nArsenals group related weapons under a single label so users can\nselect an entire attack surface with one flag.  Example::\n\n    gauntlet http://localhost:8000 --arsenal .gauntlet/arsenals/authz.yaml\n\nAn arsenal YAML file contains a ``name`` and a ``weapons`` list.",
+  "description": "A named collection of Weapons.\n\nArsenals group related weapons under a single label so the host can load\nan entire attack surface in one MCP call.  Pass ``arsenal_path`` to\n``list_weapons`` / ``get_weapon`` / ``assess_weapon`` to load from an\narsenal file instead of a weapons directory.\n\nAn arsenal YAML file contains a ``name`` and a ``weapons`` list.",
   "properties": {
     "description": {
       "default": "",

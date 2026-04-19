@@ -2,31 +2,23 @@ from __future__ import annotations
 
 from typing import Literal
 
-from .executor import Drone
 from .models import (
     Clearance,
     ExecutionResult,
     Finding,
-    GauntletRun,
     IterationRecord,
     IterationSpec,
     RiskReport,
-    Target,
-    Weapon,
-    WeaponAssessment,
 )
-from .roles import (
-    Attacker,
-    HoldoutVitals,
-    Inspector,
-    NaturalLanguageHoldoutVitals,
-    NaturalLanguageVitals,
-    WeaponAssessor,
-)
-from .store import FindingsStore, PlanStore
 
 
 def build_default_iteration_specs() -> list[IterationSpec]:
+    """Return the default 4-stage escalation ladder.
+
+    baseline → boundary → adversarial_misuse → targeted_escalation. Exposed
+    as a reference for hosts driving the adversarial loop; they may follow
+    it verbatim or author their own spec list.
+    """
     return [
         IterationSpec(
             index=1,
@@ -63,146 +55,18 @@ def build_default_iteration_specs() -> list[IterationSpec]:
     ]
 
 
-class GauntletRunner:
-    def __init__(
-        self,
-        executor: Drone,
-        attacker: Attacker,
-        inspector: Inspector,
-        holdout_vitals: HoldoutVitals | None = None,
-        nl_holdout_vitals: NaturalLanguageHoldoutVitals | None = None,
-        nl_vitals: NaturalLanguageVitals | None = None,
-        assessor: WeaponAssessor | None = None,
-        weapon: Weapon | None = None,
-        target: Target | None = None,
-        clearance_threshold: float = 0.90,
-        fail_fast_tier: int | None = None,
-        plan_store: PlanStore | None = None,
-        findings_store: FindingsStore | None = None,
-    ) -> None:
-        self._drone = executor
-        self._attacker = attacker
-        self._inspector = inspector
-        self._holdout_vitals = holdout_vitals
-        self._nl_holdout_vitals = nl_holdout_vitals
-        self._nl_vitals = nl_vitals
-        self._assessor = assessor
-        self._weapon = weapon
-        self._target = target
-        self._clearance_threshold = clearance_threshold
-        self._fail_fast_tier = fail_fast_tier
-        self._plan_store = plan_store
-        self._findings_store = findings_store
-
-    def run(self, iterations: list[IterationSpec] | None = None) -> GauntletRun:
-        specs = iterations or build_default_iteration_specs()
-
-        # Preflight: assess weapon quality before running any iterations.
-        weapon_assessment: WeaponAssessment | None = None
-        if self._assessor is not None and self._weapon is not None:
-            weapon_assessment = self._assessor.assess(self._weapon, self._target)
-            if not weapon_assessment.proceed:
-                return self._blocked_by_preflight(weapon_assessment)
-
-        # Inject a WeaponBrief (no blockers) into each iteration spec so the
-        # Attacker can read spec.weapon.description and spec.weapon.title.
-        # The full Weapon (with blockers) is held back and only passed to the
-        # holdout vitals below — this is the train/test boundary.
-        if self._weapon:
-            weapon_brief = self._weapon.brief()
-            specs = [
-                s.model_copy(update={"weapon": weapon_brief, "target": self._target}) for s in specs
-            ]
-
-        records: list[IterationRecord] = []
-        for spec in specs:
-            plans = self._attacker.generate_plans(spec, records)
-            if self._plan_store is not None and self._weapon and self._weapon.id:
-                plans = self._plan_store.deduplicate(plans, self._weapon.id)
-            execution_results = [self._drone.run_plan(plan) for plan in plans]
-            findings = self._inspector.analyze(spec, execution_results)
-            if self._weapon and self._weapon.id:
-                findings = [f.model_copy(update={"weapon_id": self._weapon.id}) for f in findings]
-            if self._findings_store is not None:
-                self._findings_store.save_all(findings)
-            records.append(
-                IterationRecord(
-                    spec=spec,
-                    plans=plans,
-                    execution_results=execution_results,
-                    findings=findings,
-                )
-            )
-
-            # Fail-fast: stop as soon as a critical finding appears in a tier
-            # at or above the configured threshold tier.
-            if self._fail_fast_tier is not None and spec.tier >= self._fail_fast_tier:
-                if any(f.severity == "critical" for f in findings):
-                    break
-
-        # Holdout plans are executed after the probe loop and their results
-        # are never fed back to the Attacker or Inspector.
-        holdout_results: list[ExecutionResult] = []
-        if self._weapon is not None:
-            if self._holdout_vitals is not None:
-                for plan in self._holdout_vitals.acceptance_plans(self._weapon):
-                    holdout_results.append(self._drone.run_plan(plan))
-
-            if self._nl_holdout_vitals is not None and self._nl_vitals is not None:
-                nl_plans = self._nl_holdout_vitals.acceptance_plans(self._weapon)
-                for nl_plan in nl_plans:
-                    holdout_results.append(self._nl_vitals.evaluate(nl_plan, self._drone))
-
-        risk_report, clearance = _build_risk_report(
-            records, holdout_results, self._clearance_threshold
-        )
-        return GauntletRun(
-            clearance=clearance,
-            weapon=self._weapon,
-            target=self._target,
-            iterations=records,
-            holdout_results=holdout_results,
-            weapon_assessment=weapon_assessment,
-            risk_report=risk_report,
-        )
-
-    def _blocked_by_preflight(self, assessment: WeaponAssessment) -> GauntletRun:
-        rationale = (
-            f"Weapon quality score {assessment.quality_score:.0%} is too low to proceed. "
-            f"Issues: {'; '.join(assessment.issues) or 'none'}."
-        )
-        clearance = Clearance(
-            passed=False,
-            holdout_satisfaction_score=0.0,
-            threshold=self._clearance_threshold,
-            recommendation="block",
-            rationale=rationale,
-        )
-        return GauntletRun(
-            clearance=clearance,
-            weapon=self._weapon,
-            target=self._target,
-            iterations=[],
-            holdout_results=[],
-            weapon_assessment=assessment,
-            risk_report=RiskReport(
-                confidence_score=0.0,
-                risk_level="low",
-                summary=["Run blocked by preflight weapon assessment."],
-                confirmed_failures=[],
-                suspicious_patterns=[],
-                unexplored_surfaces=[],
-                coverage=[],
-                conclusion="Run blocked: weapon quality score below threshold.",
-            ),
-        )
-
-
-def _build_risk_report(
+def build_risk_report(
     records: list[IterationRecord],
     holdout_results: list[ExecutionResult],
     clearance_threshold: float,
 ) -> tuple[RiskReport, Clearance | None]:
+    """Assemble a ``RiskReport`` and optional ``Clearance`` from iteration records.
+
+    ``records`` is the full per-iteration log the host has accumulated.
+    ``holdout_results`` are the execution results of the weapon's acceptance
+    plans (the withheld vitals). When ``holdout_results`` is empty, the
+    returned clearance is ``None`` — there's no gate to evaluate.
+    """
     all_findings = [finding for record in records for finding in record.findings]
     blocker_findings = [f for f in all_findings if not f.is_anomaly]
     anomaly_findings = [f for f in all_findings if f.is_anomaly]
@@ -287,12 +151,10 @@ def _confidence_score(records: list[IterationRecord], coverage: list[str]) -> fl
     if not records:
         return 0.0
 
-    # Plan diversity: distinct attack categories relative to iterations run
     all_plans = [plan for record in records for plan in record.plans]
     distinct_categories = len({plan.category for plan in all_plans}) if all_plans else 0
     plan_diversity = min(1.0, distinct_categories / len(records))
 
-    # Surface exploration depth: endpoints hit vs endpoints targeted
     targeted = [
         endpoint
         for record in records
@@ -304,7 +166,6 @@ def _confidence_score(records: list[IterationRecord], coverage: list[str]) -> fl
     else:
         surface_depth = min(1.0, len(coverage) / max(1, len(records) * 2))
 
-    # Exploration completeness: next_targets identified by findings but not yet covered
     all_findings = [finding for record in records for finding in record.findings]
     next_targets = {surface for finding in all_findings for surface in finding.next_targets}
     if next_targets:

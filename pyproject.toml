@@ -4,16 +4,14 @@ version = "0.1.0"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "anthropic>=0.50.0",
-    "click>=8.0.0",
-    "openai>=1.70.0",
+    "mcp>=1.2.0",
     "pydantic>=2.12.5",
     "pyyaml>=6.0.3",
     "requests>=2.33.1",
 ]
 
 [project.scripts]
-gauntlet = "gauntlet.cli:main"
+gauntlet-mcp = "gauntlet.server:main"
 
 [build-system]
 requires = ["hatchling"]

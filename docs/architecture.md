@@ -1,32 +1,34 @@
 # Architecture
 
+## Operating context
+
+Gauntlet runs exclusively as an MCP server inside a Claude Code session. There is no CLI, no GitHub-Actions entry point, no standalone invocation. The host Claude Code agent is the Attacker and the Inspector; Gauntlet provides the deterministic primitives.
+
+Gauntlet does not call any LLM itself and requires no Anthropic/OpenAI credentials. The host already holds its own auth; Gauntlet just runs the deterministic pieces it is asked to run.
+
 ## Module map
 
 ```
 gauntlet/
-├── models.py    # all Pydantic data models — the shared vocabulary
-│                #   includes Action/Observation (surface-agnostic wrappers
-│                #   around HttpRequest/HttpResponse and future action types)
+├── models.py    # Pydantic data models - the shared vocabulary with the host
+│                #   (Action/Observation wrap HttpRequest/HttpResponse for
+│                #   surface-agnostic execution)
 ├── auth.py      # user authentication config (BearerAuth, ApiKeyAuth, UsersConfig)
-├── openapi.py   # OpenAPI 3.x spec parser — turns a YAML/JSON spec into Target objects
-├── roles.py     # Attacker, Inspector, HoldoutVitals, WeaponAssessor protocols + demo impls
+├── openapi.py   # OpenAPI 3.x spec parser - produces Target objects
+├── roles.py     # WeaponAssessor protocol + DemoWeaponAssessor
 ├── adapters/    # Adapter protocol + concrete implementations
 │   ├── __init__.py   # Adapter protocol (send + execute)
 │   ├── http.py       # HttpApi (real HTTP) + InMemoryHttpApi (demo)
 │   ├── cli.py        # CliAdapter (stub)
 │   └── webdriver.py  # WebDriverAdapter (stub)
-├── executor.py  # Drone — runs plans via Adapter.execute(Action) → Observation
-├── llm.py       # LLMAttacker and LLMInspector backed by OpenAI or Anthropic
-├── loop.py      # GauntletRunner orchestration + risk report assembly
-├── store.py     # PlanStore and FindingsStore — disk-backed knowledge indexed by weapon ID
-├── schemas/     # JSON Schemas generated from Pydantic models (Weapon, Target,
-│                #   Arsenal, UsersConfig) — committed so external tooling can
-│                #   validate user-authored YAML without importing the package.
-│                #   Regenerate with `uv run python scripts/export_schemas.py`.
-└── cli.py       # Click entry point — reads env vars, loads config, runs GauntletRunner
+├── executor.py  # Drone - runs plans via Adapter.execute(Action) → Observation
+├── loop.py      # build_default_iteration_specs + build_risk_report helpers
+├── store.py     # PlanStore and FindingsStore - disk-backed knowledge indexed by weapon ID
+├── schemas/     # JSON Schema files for weapon / target / users / arsenal
+└── server.py    # FastMCP server exposing the 7 gauntlet tools
 ```
 
-Nothing imports from `loop.py` or `cli.py` except `__init__.py`. Dependency order is:
+Dependency order:
 
 ```
 models  ←  auth
@@ -34,145 +36,91 @@ models  ←  adapters (http, cli, webdriver, __init__)
 models  ←  openapi
 models  ←  roles
 models  ←  store
-models + auth  ←  schemas
 models + adapters  ←  executor
-models + roles + executor + store  ←  loop
-models + auth + openapi + roles + executor + llm + loop  ←  cli
+models  ←  loop
+models + auth + openapi + roles + executor + loop + adapters  ←  server
 ```
 
-## Data flow
+Nothing imports from `server.py`. The MCP entry point (`main()` in `server.py`) runs `FastMCP.run()` which speaks stdio to the Claude Code process that launched it.
+
+## MCP tool surface
+
+| Tool | Returns | Side effect |
+|---|---|---|
+| `list_weapons(weapons_path, arsenal_path)` | `list[WeaponBrief]` (no blockers) | reads YAML from disk |
+| `get_weapon(weapon_id, ...)` | `Weapon` (with blockers) | reads YAML from disk |
+| `list_targets(targets_path, openapi_path)` | `list[Target]` | reads YAML / OpenAPI spec from disk |
+| `execute_plan(url, plan, users_path)` | `ExecutionResult` | sends real HTTP requests to the SUT |
+| `assess_weapon(weapon_id, target, ...)` | `WeaponAssessment` | reads YAML from disk |
+| `assemble_run_report(iterations, holdout_results, threshold)` | `dict` with `risk_report` + `clearance` | none |
+| `default_iteration_specs()` | `list[IterationSpec]` | none |
+
+## Train/test split
+
+The split is preserved by host-side prompt discipline, not by Gauntlet's runtime:
+
+- The Attacker context may read `list_weapons` (briefs have no blockers) and call `execute_plan`, but must never read `get_weapon` output - that would leak blocker text.
+- The HoldoutEvaluator context reads `get_weapon`, constructs acceptance plans from the blockers, and calls `execute_plan` to run them. Results feed into `assemble_run_report` via the `holdout_results` argument.
+- The Inspector context reads `ExecutionResult` objects to produce `Finding`s. It does not read blockers.
+
+## Host-driven loop shape
 
 ```
-GauntletRunner.run()
+(host agent in a Claude Code session)
 │
-├── [preflight] WeaponAssessor.assess(weapon) — if assessor present
-│     └── returns WeaponAssessment; blocked → short-circuit
+├── Orchestrator context:
+│     list_weapons() → pick a weapon
+│     list_targets() → pick a target
+│     assess_weapon(id, target) → optional preflight
+│     default_iteration_specs() → reference ladder
 │
-├── for each IterationSpec (4 total):
-│   ├── Attacker.generate_plans(spec, previous records)
-│   │     └── returns []Plan
+├── For each iteration spec (typically 4):
+│   ├── Attacker context:
+│   │     generate Plan(s) from spec + prior findings
+│   │     (never reads blockers)
 │   │
-│   ├── Drone.run_plan(plan) × N
-│   │     ├── resolves path templates from prior step responses
-│   │     ├── wraps HttpRequest in Action, calls Adapter.execute(user, action)
-│   │     ├── unwraps Observation back to HttpResponse
-│   │     └── evaluates assertions → []AssertionResult
-│   │         returns ExecutionResult
+│   ├── Orchestrator context:
+│   │     execute_plan(url, plan) → ExecutionResult
 │   │
-│   ├── Inspector.analyze(spec, execution_results)
-│   │     └── returns []Finding (includes anomalies: is_anomaly=True)
-│   │
-│   └── appends IterationRecord to records
+│   └── Inspector context:
+│         analyze ExecutionResult(s) → Finding(s)
+│         (never reads blockers)
 │
-├── [holdout] HoldoutVitals or NaturalLanguageHoldoutVitals
-│     └── evaluates weapon acceptance plans (Attacker never sees these)
+├── HoldoutEvaluator context:
+│     get_weapon(id) → full Weapon (with blockers)
+│     derive acceptance plans from blockers
+│     execute_plan(url, plan) per holdout plan → ExecutionResult
 │
-└── _build_risk_report(records)
-      ├── aggregates findings across all iterations
-      ├── separates blocker findings from anomalies (is_anomaly flag)
-      ├── derives coverage from all executed steps
-      ├── computes confidence_score (plan diversity + surface depth + exploration completeness)
-      ├── derives risk_level from highest blocker-finding severity (anomalies excluded)
-      ├── collects anomalies into RiskReport.anomalies for future weapon refinement
-      ├── evaluates clearance against gate_threshold
-      └── returns RiskReport
+└── Orchestrator context:
+      assemble_run_report(iterations, holdout_results) → RiskReport + Clearance
 ```
 
 ## Deterministic vs non-deterministic segments
 
-The system is split into a **deterministic core** and **non-deterministic edges**.
+**Deterministic (no network, no LLM):**
 
-**Deterministic (no LLM, no network):**
+- `InMemoryHttpApi` - in-memory REST API with three seeded flaws: (1) PATCH without ownership check, (2) POST accepts invalid data types for title and missing required fields, (3) GET /tasks leaks all tasks regardless of ownership. Ships with the library as a working example SUT.
+- `Drone` - resolves path templates, calls the adapter, evaluates assertions.
+- Assertion evaluation, risk-report assembly, weapon assessment - all pure Python.
 
-- `InMemoryHttpApi` — in-memory REST API with three deterministic seeded flaws: (1) PATCH without ownership check, (2) POST accepts invalid data types for title and missing required fields, (3) GET /tasks list endpoint leaks all tasks regardless of ownership. Pure dict operations, always same output for same input. Ships with the library as a working example SUT.
-- `Drone` — resolves path templates, calls the SUT, evaluates assertions. Pure Python.
-- Assertion evaluation and risk report assembly — branching logic, set unions, averages, threshold arithmetic. Fully reproducible.
-- `Demo*` classes — hardcoded or regex-based implementations of each Protocol. Shipped with the library so users can run the full loop without API keys.
+**Non-deterministic (network):**
 
-**Non-deterministic (LLM or network):**
+- `HttpApi` - sends real HTTP requests; outcome depends on the running server.
 
-- `LLMAttacker` / `LLMInspector` (`llm.py`) — call an LLM to generate plans and analyze findings. Output varies per call.
-- `HttpExecutor` — sends real HTTP requests; outcome depends on network and the running server.
-
-The `Demo*` classes are reference implementations of each Protocol in `roles.py`. They exist so that `GauntletRunner` can be exercised end-to-end in tests and examples without any external dependencies. The `LLM*` classes are the production counterparts.
+The host itself is non-deterministic (it's an LLM agent), but Gauntlet doesn't run the host. Gauntlet's own code is deterministic end-to-end.
 
 ## Design decisions
 
-**Why Pydantic?** All interchange objects are `BaseModel` subclasses with
-`extra="forbid"`. This catches schema drift early and makes JSON
-serialization/deserialization free.
+**Why MCP only?** Gauntlet's consumer is the dark-factory pipeline, which runs inside Claude Code. Keeping CLI + MCP + library surfaces in parallel multiplied integration cost without adding value for the one consumer that actually uses it. MCP is the one surface that lets the host drive Gauntlet as a tool inside its own loop.
 
-**Why 4 fixed iterations?** v0 trades flexibility for predictability. The four
-goals (baseline → boundary → adversarial_misuse → targeted_escalation) form a natural escalation
-ladder that works well for demo purposes. Future versions will make this
-configurable.
+**Why Pydantic?** All interchange objects are `BaseModel` subclasses with `extra="forbid"`. This catches schema drift early and makes JSON serialization/deserialization free - including over the MCP tool boundary.
 
-**Why Protocols instead of ABCs?** Structural subtyping lets callers pass any
-object that has the right methods without importing from `gauntlet`. This keeps
-the integration surface small and avoids inheritance coupling.
+**Why Protocols instead of ABCs?** Structural subtyping lets callers pass any object that has the right methods without importing from `gauntlet`. Only `WeaponAssessor` remains as a protocol now that Attacker/Inspector are host-driven.
 
-**Why separate auth.py?** User credentials involve secret resolution from env
-vars. Isolating this in `auth.py` keeps the rest of the codebase free of
-secret-handling logic and makes the boundary clear.
+**Why separate auth.py?** User credentials involve secret resolution from env vars. Isolating this in `auth.py` keeps the rest of the codebase free of secret-handling logic.
 
-**Why Action/Observation instead of passing HttpRequest/HttpResponse directly?**
-The adversarial loop should not be coupled to a single execution surface.
-Action wraps an HttpRequest today (and CLI commands or WebDriver interactions
-tomorrow); Observation wraps the corresponding response.  The Drone converts
-between the two layers so the rest of the system stays surface-agnostic.
-Adapters implement both ``send`` (HTTP shorthand) and ``execute``
-(Action/Observation) so existing callers keep working.
+**Why Action/Observation instead of passing HttpRequest/HttpResponse directly?** The adversarial loop should not be coupled to a single execution surface. Action wraps an HttpRequest today and will wrap CLI commands or WebDriver interactions in the future; Observation wraps the corresponding response. The Drone converts between the two layers.
 
-**Why LLM providers are configurable per-role?** The Attacker and Inspector
-can use different providers (e.g., GPT-4 vs Claude) so users can mix strengths
-or reduce cost. The same knob also supports the single-provider case: an
-agentic-loop consumer running entirely inside one auth context (one
-subscription, one MCP surface) sets both roles to the same provider. The
-per-role configurability is the primitive; cross-provider and single-provider
-are both first-class configurations of it.
+**Why host-driven Attacker/Inspector?** Because Gauntlet runs inside Claude Code, the host already has an LLM ready to play both roles. Re-invoking a separate Anthropic or OpenAI client from Gauntlet's own process would require credentials Gauntlet doesn't have a clean way to acquire, and would duplicate reasoning capacity the host already provides.
 
-**Why Arsenals?** Individual weapons test one property at a time, which is the
-right granularity for authoring and debugging. But CI pipelines and agentic
-loops need to select an entire class of attacks — authorization, input
-validation, OWASP top-10 — as a single unit. An Arsenal is a named collection
-of Weapons that can be versioned, shared, and loaded with one flag
-(``--arsenal``). Without arsenals, users would need to list every weapon file
-on the command line or maintain a wrapper script.  The CLI falls back to
-``--weapon`` for individual weapon files when no arsenal is specified.
-
-## Artifact directory layout
-
-The CLI writes every machine-readable run artifact under a single root
-directory, controlled by ``--artifact-dir`` (default ``.gauntlet/artifacts``).
-An orchestrator invoking Gauntlet as a subprocess can point this flag at a
-scratch directory and then read everything back from known locations without
-parsing stdout.
-
-```
-{artifact_dir}/
-├── plans/
-│   └── {weapon_id}/
-│       └── {plan_name}.yaml          # PlanStore — reused across runs
-├── findings/
-│   └── {weapon_id}/
-│       └── {issue}.yaml              # FindingsStore — one file per issue
-└── runs/
-    ├── {weapon_slug}__{target_slug}.{yaml,json}   # one file per (weapon, target)
-    └── latest.{yaml,json}            # always the most recent run
-```
-
-Rules:
-
-- Paths are stable. A consumer can glob ``{artifact_dir}/runs/*.yaml`` (or
-  ``*.json`` when ``--format json`` is set) to discover all runs from a single
-  invocation.
-- ``{weapon_slug}`` is the weapon's ``id`` (already snake_case) or
-  ``no_weapon`` when no weapon was configured. ``{target_slug}`` is a lowercase
-  underscore slug of ``target.title`` or ``no_target``.
-- ``runs/latest.{ext}`` is overwritten on every run so a consumer that only
-  cares about the last result has a single fixed path to read.
-- The ``plans/`` and ``findings/`` trees accumulate across invocations and are
-  indexed by weapon id; they are the persistence layer that ``PlanStore`` and
-  ``FindingsStore`` read on startup.
-- The extension of files in ``runs/`` matches ``--format`` (``yaml`` or
-  ``json``). ``plans/`` and ``findings/`` are always YAML.
+**Why Arsenals?** Individual weapons test one property at a time, which is the right granularity for authoring and debugging. An Arsenal groups related weapons under one YAML file so the host can select an entire attack class (authorization, input validation, OWASP top-10) as a unit.

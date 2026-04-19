@@ -1,8 +1,7 @@
 from .adapters import Adapter, CliAdapter, HttpApi, InMemoryHttpApi, WebDriverAdapter
 from .auth import ApiKeyAuth, BearerAuth, UsersConfig, to_user_headers
 from .executor import Drone
-from .llm import LLMAttacker, LLMInspector, create_attacker, create_inspector
-from .loop import GauntletRunner, build_default_iteration_specs
+from .loop import build_default_iteration_specs, build_risk_report
 from .models import (
     Action,
     Arsenal,
@@ -17,7 +16,6 @@ from .models import (
     HttpResponse,
     IterationRecord,
     IterationSpec,
-    NaturalLanguagePlan,
     Observation,
     Plan,
     PlanStep,
@@ -28,14 +26,7 @@ from .models import (
     WeaponBrief,
 )
 from .openapi import parse_openapi
-from .roles import (
-    DemoAttacker,
-    DemoHoldoutVitals,
-    DemoInspector,
-    DemoNaturalLanguageHoldoutVitals,
-    DemoNaturalLanguageVitals,
-    DemoWeaponAssessor,
-)
+from .roles import DemoWeaponAssessor, WeaponAssessor
 from .store import FindingsStore, PlanStore
 
 __all__ = [
@@ -48,11 +39,6 @@ __all__ = [
     "BearerAuth",
     "CliAdapter",
     "Clearance",
-    "DemoAttacker",
-    "DemoHoldoutVitals",
-    "DemoInspector",
-    "DemoNaturalLanguageHoldoutVitals",
-    "DemoNaturalLanguageVitals",
     "DemoWeaponAssessor",
     "Drone",
     "ExecutionResult",
@@ -60,30 +46,26 @@ __all__ = [
     "Finding",
     "FindingsStore",
     "GauntletRun",
-    "GauntletRunner",
     "HttpApi",
     "HttpRequest",
     "HttpResponse",
     "InMemoryHttpApi",
     "IterationRecord",
     "IterationSpec",
-    "LLMAttacker",
-    "LLMInspector",
-    "NaturalLanguagePlan",
     "Observation",
     "Plan",
     "PlanStep",
     "PlanStore",
-    "parse_openapi",
     "RiskReport",
     "Target",
     "UsersConfig",
     "Weapon",
     "WeaponAssessment",
+    "WeaponAssessor",
     "WeaponBrief",
     "WebDriverAdapter",
     "build_default_iteration_specs",
-    "create_attacker",
-    "create_inspector",
+    "build_risk_report",
+    "parse_openapi",
     "to_user_headers",
 ]

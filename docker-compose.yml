@@ -8,18 +8,6 @@ services:
       timeout: 5s
       retries: 10
 
-  demo:
-    build: .
-    command: uv run gauntlet http://api:8000
-    depends_on:
-      api:
-        condition: service_healthy
-    environment:
-      - GAUNTLET_ATTACKER_TYPE
-      - GAUNTLET_ATTACKER_KEY
-      - GAUNTLET_INSPECTOR_TYPE
-      - GAUNTLET_INSPECTOR_KEY
-
   test:
     build: .
     command: uv run pytest -m "not docker"
