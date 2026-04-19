@@ -5,10 +5,12 @@ from typing import Literal
 from .models import (
     Clearance,
     ExecutionResult,
+    FinalClearance,
     Finding,
     IterationRecord,
     IterationSpec,
     RiskReport,
+    WeaponReport,
 )
 
 
@@ -183,6 +185,87 @@ def _risk_level(findings: list[Finding]) -> Literal["low", "medium", "high"]:
     if any(finding.severity == "medium" for finding in findings):
         return "medium"
     return "low"
+
+
+_RISK_RANK: dict[str, int] = {"low": 0, "medium": 1, "high": 2}
+
+
+def aggregate_final_clearance(
+    per_weapon: list[WeaponReport], clearance_threshold: float
+) -> FinalClearance:
+    """Aggregate per-weapon reports into one overall pass/fail decision.
+
+    Used by the ``assemble_final_clearance`` MCP tool. See
+    :class:`FinalClearance` for the aggregation rules.
+    """
+    if not per_weapon:
+        return FinalClearance(
+            overall_confidence=0.0,
+            max_risk_level="low",
+            all_confirmed_failures=[],
+            final_recommendation="block",
+            rationale="No weapons were run; nothing can be cleared.",
+            clearance_threshold=clearance_threshold,
+            per_weapon_reports=[],
+        )
+
+    confidence_signals: list[float] = []
+    for wr in per_weapon:
+        confidence_signals.append(wr.risk_report.confidence_score)
+        if wr.clearance is not None:
+            confidence_signals.append(wr.clearance.holdout_satisfaction_score)
+    overall_confidence = round(min(confidence_signals), 4)
+
+    max_risk_rank = max(_RISK_RANK[wr.risk_report.risk_level] for wr in per_weapon)
+    max_risk_level: Literal["low", "medium", "high"]
+    if max_risk_rank == _RISK_RANK["high"]:
+        max_risk_level = "high"
+    elif max_risk_rank == _RISK_RANK["medium"]:
+        max_risk_level = "medium"
+    else:
+        max_risk_level = "low"
+
+    all_confirmed_failures = sorted(
+        {failure for wr in per_weapon for failure in wr.risk_report.confirmed_failures}
+    )
+
+    has_high = max_risk_rank == _RISK_RANK["high"]
+    has_medium = any(wr.risk_report.risk_level == "medium" for wr in per_weapon)
+    threshold_met = overall_confidence >= clearance_threshold
+
+    final_recommendation: Literal["pass", "conditional", "block"]
+    if threshold_met and not has_high and not has_medium:
+        final_recommendation = "pass"
+        rationale = (
+            f"Overall confidence {overall_confidence:.0%} meets threshold "
+            f"{clearance_threshold:.0%} and no medium- or high-risk findings."
+        )
+    elif threshold_met and not has_high:
+        final_recommendation = "conditional"
+        rationale = (
+            f"Overall confidence {overall_confidence:.0%} meets threshold "
+            f"{clearance_threshold:.0%} but at least one weapon surfaced "
+            f"medium-severity findings — human review recommended."
+        )
+    else:
+        final_recommendation = "block"
+        if has_high:
+            rationale = "At least one weapon surfaced high-severity findings; promotion is blocked."
+        else:
+            rationale = (
+                f"Overall confidence {overall_confidence:.0%} is below threshold "
+                f"{clearance_threshold:.0%}."
+            )
+
+    return FinalClearance(
+        overall_confidence=overall_confidence,
+        max_risk_level=max_risk_level,
+        all_confirmed_failures=all_confirmed_failures,
+        final_recommendation=final_recommendation,
+        rationale=rationale,
+        clearance_threshold=clearance_threshold,
+        per_weapon_reports=per_weapon,
+    )
 
 
 def _conclusion(risk_level: str, confirmed_failures: list[str]) -> str:

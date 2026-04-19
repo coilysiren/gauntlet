@@ -1,7 +1,7 @@
 from .adapters import Adapter, CliAdapter, HttpApi, InMemoryHttpApi, WebDriverAdapter
 from .auth import ApiKeyAuth, BearerAuth, UsersConfig, to_user_headers
 from .executor import Drone
-from .loop import build_default_iteration_specs, build_risk_report
+from .loop import aggregate_final_clearance, build_default_iteration_specs, build_risk_report
 from .models import (
     Action,
     Arsenal,
@@ -10,6 +10,7 @@ from .models import (
     Clearance,
     ExecutionResult,
     ExecutionStepResult,
+    FinalClearance,
     Finding,
     GauntletRun,
     HoldoutResult,
@@ -25,6 +26,7 @@ from .models import (
     Weapon,
     WeaponAssessment,
     WeaponBrief,
+    WeaponReport,
 )
 from .openapi import parse_openapi
 from .roles import DemoWeaponAssessor, WeaponAssessor
@@ -45,6 +47,7 @@ __all__ = [
     "Drone",
     "ExecutionResult",
     "ExecutionStepResult",
+    "FinalClearance",
     "Finding",
     "FindingsStore",
     "GauntletRun",
@@ -67,7 +70,9 @@ __all__ = [
     "WeaponAssessment",
     "WeaponAssessor",
     "WeaponBrief",
+    "WeaponReport",
     "WebDriverAdapter",
+    "aggregate_final_clearance",
     "build_default_iteration_specs",
     "build_risk_report",
     "parse_openapi",

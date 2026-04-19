@@ -1,7 +1,7 @@
 ---
 name: gauntlet-holdout-evaluator
 description: Holdout evaluator for one Gauntlet weapon. Reads the weapon's blockers, derives one acceptance plan per blocker, executes them against the SUT, and appends each HoldoutResult to the run buffer. Runs in fresh context — no Attacker or Inspector traces carry in.
-tools: mcp__gauntlet__get_weapon, mcp__gauntlet__execute_plan, mcp__gauntlet__record_holdout_result
+tools: mcp__gauntlet__get_weapon, mcp__gauntlet__execute_plan, mcp__gauntlet__record_holdout_result, mcp__gauntlet__assemble_final_clearance
 ---
 
 # Gauntlet HoldoutEvaluator

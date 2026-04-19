@@ -29,11 +29,12 @@ from mcp.server.fastmcp import FastMCP
 from .adapters import HttpApi
 from .auth import UsersConfig, to_user_headers
 from .executor import Drone
-from .loop import build_default_iteration_specs, build_risk_report
+from .loop import aggregate_final_clearance, build_default_iteration_specs, build_risk_report
 from .models import (
     Arsenal,
     Clearance,
     ExecutionResult,
+    FinalClearance,
     HoldoutResult,
     IterationRecord,
     IterationSpec,
@@ -43,6 +44,7 @@ from .models import (
     Weapon,
     WeaponAssessment,
     WeaponBrief,
+    WeaponReport,
 )
 from .openapi import parse_openapi
 from .roles import DemoWeaponAssessor
@@ -295,6 +297,46 @@ def read_holdout_results(
 
 
 @mcp.tool()
+def assemble_final_clearance(
+    run_id: str,
+    clearance_threshold: float = 0.90,
+    weapon_ids: list[str] | None = None,
+    runs_path: str | None = None,
+) -> FinalClearance:
+    """Aggregate every per-weapon report in a run into one overall clearance.
+
+    Reads the run buffer for every weapon declared at ``start_run`` time
+    (override with ``weapon_ids`` if you only want a subset), assembles a
+    per-weapon ``RiskReport`` + ``Clearance`` for each, and reduces them to
+    a single ``FinalClearance``.
+
+    Aggregation rules (see :class:`FinalClearance`):
+
+    - ``overall_confidence`` = min over per-weapon confidence_score and
+      holdout_satisfaction_score (weakest link dominates).
+    - ``max_risk_level`` = max severity across per-weapon risk levels.
+    - ``final_recommendation`` = ``pass`` only when threshold is met AND no
+      medium- or high-risk weapons; ``conditional`` when threshold is met
+      with medium-risk weapons but no high-risk; ``block`` otherwise.
+
+    Allow this tool only in the Orchestrator role. Attacker and Inspector
+    contexts must not see per-weapon reports — they carry confirmed-failure
+    text that paraphrases blocker semantics.
+    """
+    store = _store(runs_path)
+    weapons = list(weapon_ids) if weapon_ids is not None else store.list_weapon_ids(run_id)
+
+    per_weapon: list[WeaponReport] = []
+    for wid in weapons:
+        records = store.read_iteration_records(run_id, wid)
+        holdouts = [hr.execution_result for hr in store.read_holdout_results(run_id, wid)]
+        report, clearance = build_risk_report(records, holdouts, clearance_threshold)
+        per_weapon.append(WeaponReport(weapon_id=wid, risk_report=report, clearance=clearance))
+
+    return aggregate_final_clearance(per_weapon, clearance_threshold)
+
+
+@mcp.tool()
 def default_iteration_specs() -> list[IterationSpec]:
     """Return the default 4-stage iteration ladder as reference.
 
@@ -306,7 +348,9 @@ def default_iteration_specs() -> list[IterationSpec]:
 
 __all__ = [
     "Clearance",
+    "FinalClearance",
     "RiskReport",
+    "assemble_final_clearance",
     "assemble_run_report",
     "assess_weapon",
     "default_iteration_specs",

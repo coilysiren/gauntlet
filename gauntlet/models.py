@@ -315,6 +315,48 @@ class RiskReport(GauntletModel):
     conclusion: str
 
 
+class WeaponReport(GauntletModel):
+    """One weapon's contribution to a multi-weapon `FinalClearance`.
+
+    Carries the per-weapon `RiskReport` and `Clearance` plus the weapon id
+    so the orchestrator can correlate results back to the run buffer.
+    """
+
+    weapon_id: str
+    risk_report: RiskReport
+    clearance: Clearance | None = None
+
+
+class FinalClearance(GauntletModel):
+    """Aggregated clearance across every weapon in a run.
+
+    Produced by ``assemble_final_clearance``. The host treats
+    ``final_recommendation`` as its overall pass/fail decision; the per-weapon
+    reports are kept inline so a failed run can be unpacked without a second
+    round-trip to the buffer.
+
+    Aggregation rules (defaults — override in the docstring of the tool that
+    constructs this if you change them):
+
+    - ``overall_confidence`` — minimum of per-weapon ``risk_report.confidence_score``
+      and per-weapon ``clearance.holdout_satisfaction_score`` (weakest link
+      dominates). Weapons without a holdout still count their confidence score.
+    - ``max_risk_level`` — highest severity across all per-weapon risk levels.
+    - ``final_recommendation`` — ``pass`` if ``overall_confidence >=
+      clearance_threshold`` AND no per-weapon ``high``-risk level; ``conditional``
+      if threshold met but at least one per-weapon ``medium``-risk level exists;
+      ``block`` otherwise.
+    """
+
+    overall_confidence: float = Field(ge=0.0, le=1.0)
+    max_risk_level: Literal["low", "medium", "high"]
+    all_confirmed_failures: list[str]
+    final_recommendation: Literal["pass", "conditional", "block"]
+    rationale: str
+    clearance_threshold: float
+    per_weapon_reports: list[WeaponReport]
+
+
 class GauntletRun(GauntletModel):
     clearance: Clearance | None = None
     weapon: Weapon | None = None

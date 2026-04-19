@@ -61,6 +61,7 @@ Nothing imports from `server.py`. The MCP entry point (`main()` in `server.py`) 
 | `record_holdout_result(run_id, weapon_id, holdout_result, runs_path)` | `{status: ok}` | appends one `HoldoutResult` to the buffer |
 | `read_holdout_results(run_id, weapon_id, runs_path)` | `list[HoldoutResult]` | reads from the buffer |
 | `assemble_run_report(run_id, weapon_id, ... \| iterations, holdout_results, threshold)` | `dict` with `risk_report` + `clearance` | reads from the buffer (or accepts explicit lists) |
+| `assemble_final_clearance(run_id, clearance_threshold, weapon_ids?)` | `FinalClearance` | reads every per-weapon report from the buffer and aggregates |
 | `default_iteration_specs()` | `list[IterationSpec]` | none |
 
 ### Run-scoped buffer

@@ -69,6 +69,7 @@ cp path/to/gauntlet/skills/gauntlet/SKILL.md .claude/skills/gauntlet/SKILL.md
 | `record_holdout_result(run_id, weapon_id, holdout_result)` | Append a `HoldoutResult` to the run buffer | HoldoutEvaluator |
 | `read_holdout_results(run_id, weapon_id)` | Read prior `HoldoutResult`s for one weapon in this run | Orchestrator |
 | `assemble_run_report(run_id, weapon_id)` (or explicit lists) | Build per-weapon `RiskReport` + `Clearance` | Orchestrator |
+| `assemble_final_clearance(run_id, clearance_threshold)` | Aggregate every per-weapon report in the run into one overall `FinalClearance` (pass / conditional / block) | Orchestrator, HoldoutEvaluator |
 | `default_iteration_specs()` | Return the reference 4-stage escalation ladder | Orchestrator |
 
 The train/test split is enforced at the permission layer via MCP-tool allowlists on each per-role subagent — see the [`agents/`](agents/) directory. The Attacker subagent literally cannot call `get_weapon`, the Inspector subagent cannot call `get_weapon` or read holdout results, and the HoldoutEvaluator subagent cannot read the iteration buffer. A documented single-host fallback (no subagent dispatch) is available for environments that don't support subagents; see the skill for details.

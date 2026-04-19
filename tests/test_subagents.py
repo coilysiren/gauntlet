@@ -27,6 +27,7 @@ ATTACKER_FORBID = {
     "mcp__gauntlet__get_weapon",
     "mcp__gauntlet__read_holdout_results",
     "mcp__gauntlet__record_holdout_result",
+    "mcp__gauntlet__assemble_final_clearance",
 }
 
 INSPECTOR_ALLOW = {
@@ -38,12 +39,14 @@ INSPECTOR_FORBID = {
     "mcp__gauntlet__execute_plan",
     "mcp__gauntlet__read_holdout_results",
     "mcp__gauntlet__record_holdout_result",
+    "mcp__gauntlet__assemble_final_clearance",
 }
 
 HOLDOUT_ALLOW = {
     "mcp__gauntlet__get_weapon",
     "mcp__gauntlet__execute_plan",
     "mcp__gauntlet__record_holdout_result",
+    "mcp__gauntlet__assemble_final_clearance",
 }
 HOLDOUT_FORBID = {
     "mcp__gauntlet__read_iteration_records",
