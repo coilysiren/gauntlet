@@ -14,25 +14,44 @@ Gauntlet runs **exclusively as an MCP server inside Claude Code**. There is no C
 
 Because Gauntlet runs inside a Claude Code session, no Anthropic credentials are needed - the host already has auth.
 
-## Install and register
+## Install
+
+Gauntlet ships as a Claude Code plugin that bundles the MCP server and the host [skill](skills/gauntlet/SKILL.md) into one install:
 
 ```bash
-uv add gauntlet     # or: pip install gauntlet
-claude mcp add gauntlet -- uv run gauntlet-mcp
+claude plugin install https://github.com/coilysiren/gauntlet
 ```
 
-Once registered, Claude Code will expose the `gauntlet` MCP server to any session in that project. Confirm it is discovered with `/mcp` inside Claude Code.
-
-### Install the host skill
-
-The MCP server exposes tools; the [host skill](skills/gauntlet/SKILL.md) tells the host agent how to drive them - the role discipline, the iteration ladder, the plan and finding shapes, and the train/test split rules. Copy it into your project's Claude Code skills directory:
+Or, for local development against a clone:
 
 ```bash
+git clone https://github.com/coilysiren/gauntlet
+cd your-project
+claude --plugin-dir path/to/gauntlet
+```
+
+On first invocation, `uv` auto-resolves the Python dependencies for the MCP server. Confirm the plugin is discovered with `/mcp` (for the server) and by trying a trigger phrase like "run gauntlet" (for the skill) inside Claude Code.
+
+### What you get
+
+- **MCP server `gauntlet`** — the seven deterministic tools listed below.
+- **Skill `gauntlet`** — auto-loads on trigger phrases ("run gauntlet", "adversarial test", "check before merging") and walks the host through the role-disciplined loop.
+
+Without the skill, a host could still call the MCP tools ad-hoc, but it would have to re-derive the loop every time and would be far more likely to collapse the train/test split. The plugin delivery is what makes the two pieces stay in sync.
+
+### Manual install (without the plugin)
+
+If you are not using the plugin system, you can install the server and skill separately:
+
+```bash
+# Install the package + register the MCP server
+uv add gauntlet
+claude mcp add gauntlet -- uv run gauntlet-mcp
+
+# Copy the skill into the project
 mkdir -p .claude/skills/gauntlet
 cp path/to/gauntlet/skills/gauntlet/SKILL.md .claude/skills/gauntlet/SKILL.md
 ```
-
-With the skill installed, any session in that project can invoke Gauntlet by naming it ("run gauntlet against http://localhost:8000", "adversarially test this API before I merge"). Without the skill, the host has to re-derive the loop each time and is far more likely to collapse the train/test split.
 
 ## MCP tools
 

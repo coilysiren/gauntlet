@@ -22,13 +22,37 @@ uv run pre-commit install  # install git hooks
 uv run gauntlet-mcp
 ```
 
-This speaks stdio. To exercise it from Claude Code, register it:
+This speaks stdio.
+
+## Exercising the plugin end-to-end
+
+The repo doubles as a Claude Code plugin. Point Claude Code at it during development:
 
 ```bash
-claude mcp add gauntlet -- uv run gauntlet-mcp
+cd your-test-project
+claude --plugin-dir /absolute/path/to/gauntlet
 ```
 
-Then open a session in this repo and use the `gauntlet` tools under `/mcp`.
+This loads the plugin from disk for the current session - no install, no cache. Claude Code will:
+
+- register the `gauntlet` MCP server via `uv run --project ${CLAUDE_PLUGIN_ROOT} gauntlet-mcp`
+- auto-discover the skill at `skills/gauntlet/SKILL.md`
+
+Verify:
+- `/mcp` lists `gauntlet` with its 7 tools
+- Typing a trigger phrase like "run gauntlet" loads the skill
+
+To install the plugin permanently (for non-development use):
+
+```bash
+claude plugin install /absolute/path/to/gauntlet
+```
+
+Files the plugin system reads:
+- `.claude-plugin/plugin.json` - manifest (MCP server declaration, metadata)
+- `skills/gauntlet/SKILL.md` - auto-discovered skill
+
+Both paths are load-bearing. Moving either breaks the plugin; update `plugin.json` if you relocate a file.
 
 ## Running the demo API
 
