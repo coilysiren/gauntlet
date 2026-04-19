@@ -2,5 +2,10 @@ __pycache__
 .venv
 .coverage
 coverage.xml
+htmlcov/
+.hypothesis/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 docs/superpowers
 .claude/worktrees/

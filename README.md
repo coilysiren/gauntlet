@@ -1,5 +1,17 @@
 # ⚡🔄🛂 Gauntlet
 
+[![CI](https://github.com/coilysiren/gauntlet/actions/workflows/ci.yml/badge.svg)](https://github.com/coilysiren/gauntlet/actions/workflows/ci.yml)
+[![Python 3.13](https://img.shields.io/badge/python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/release/python-3130/)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![mypy: strict](https://img.shields.io/badge/mypy-strict-1f5082?logo=python&logoColor=white)](http://mypy-lang.org/)
+[![tests: 151 passing](https://img.shields.io/badge/tests-151%20passing-brightgreen?logo=pytest&logoColor=white)](#development)
+[![coverage: 99%](https://img.shields.io/badge/coverage-99%25-brightgreen)](#development)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://pre-commit.com/)
+[![tested: hypothesis](https://img.shields.io/badge/tested%20with-hypothesis-d4aa00?logo=python&logoColor=white)](https://hypothesis.readthedocs.io/)
+[![MCP server](https://img.shields.io/badge/MCP-server-8A63D2)](https://modelcontextprotocol.io/)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D4A27F?logo=anthropic&logoColor=white)](https://docs.claude.com/en/docs/claude-code)
+
 Gauntlet is a two-role adversarial MCP server that infers software correctness by observing how code behaves under sustained, targeted attack. It's designed as quality control for a dark-factory environment - where code is written by bots and verified by attack.
 
 The name comes from "running the gauntlet": a challenge where you must survive a sustained barrage from all sides. Here, the host Claude Code agent drives the system under test through escalating tiers of adversarial pressure until hidden failure modes become detectable - then gates promotion on whether any signal came through.

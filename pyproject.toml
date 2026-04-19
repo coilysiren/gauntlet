@@ -19,8 +19,8 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 markers = ["docker: requires Docker and docker compose (deselect with -m 'not docker')"]
-addopts = "--cov=gauntlet --cov-report=term-missing --cov-report=xml"
-norecursedirs = [".gauntlet", ".hypothesis"]
+addopts = "--cov=gauntlet --cov-report=term-missing --cov-report=xml --cov-report=html"
+norecursedirs = [".gauntlet", ".hypothesis", ".claude"]
 
 [tool.coverage.run]
 branch = true
