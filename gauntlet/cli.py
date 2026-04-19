@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,7 @@ from .loop import GauntletRunner
 from .models import Arsenal, ExecutionResult, Finding, GauntletRun, Target, Weapon
 from .openapi import parse_openapi
 from .roles import DemoWeaponAssessor
+from .store import FindingsStore, PlanStore
 
 _ENV_ATTACKER_TYPE = "GAUNTLET_ATTACKER_TYPE"
 _ENV_ATTACKER_KEY = "GAUNTLET_ATTACKER_KEY"
@@ -24,12 +27,22 @@ _ENV_INSPECTOR_KEY = "GAUNTLET_INSPECTOR_KEY"
 
 _DEFAULT_CONFIG_PATH = ".gauntlet/config.yaml"
 
+# Exit-code taxonomy — see docs/usage.md#exit-codes.
+# Orchestrators distinguish outcomes by process exit code; these values are a
+# stable contract.
+EXIT_CLEARANCE = 0
+EXIT_BLOCKED = 1
+EXIT_RUNTIME_ERROR = 2
+EXIT_CONFIG_ERROR = 3
+
 _OPTION_DEFAULTS: dict[str, Any] = {
     "weapon": ".gauntlet/weapons",
     "target": ".gauntlet/targets",
     "users": ".gauntlet/users.yaml",
+    "artifact_dir": ".gauntlet/artifacts",
     "threshold": 0.90,
     "fail_fast": True,
+    "format": "yaml",
 }
 
 
@@ -43,7 +56,7 @@ def _load_config_file(path: str | None) -> dict[str, Any]:
     p = Path(path)
     if not p.exists():
         click.echo(f"error: config file not found: {path}", err=True)
-        sys.exit(1)
+        sys.exit(EXIT_CONFIG_ERROR)
     raw = yaml.safe_load(p.read_text())
     return dict(raw) if isinstance(raw, dict) else {}
 
@@ -112,6 +125,16 @@ def _load_targets(spec: str) -> list[Target]:
     help="Path to users YAML file. [default: .gauntlet/users.yaml]",
 )
 @click.option(
+    "--artifact-dir",
+    "artifact_dir",
+    default=None,
+    metavar="DIR",
+    help=(
+        "Directory for machine-readable run artifacts (plans, findings, run reports). "
+        "[default: .gauntlet/artifacts]"
+    ),
+)
+@click.option(
     "--threshold",
     type=float,
     default=None,
@@ -129,6 +152,14 @@ def _load_targets(spec: str) -> list[Target]:
     default=None,
     help="Stop after the first critical finding. [default: True]",
 )
+@click.option(
+    "--format",
+    "output_format",
+    type=click.Choice(["yaml", "json"], case_sensitive=False),
+    default=None,
+    metavar="FORMAT",
+    help="Output format for the run report. [default: yaml]",
+)
 def main(
     url: str | None,
     config_path: str | None,
@@ -136,9 +167,11 @@ def main(
     weapon: str | None,
     target: str | None,
     users: str | None,
+    artifact_dir: str | None,
     threshold: float | None,
     openapi: str | None,
     fail_fast: bool | None,
+    output_format: str | None,
 ) -> None:
     file_cfg = _load_config_file(config_path)
     if "fail-fast" in file_cfg:
@@ -150,7 +183,7 @@ def main(
             "error: URL is required. Provide it as a positional argument or via config file.",
             err=True,
         )
-        sys.exit(1)
+        sys.exit(EXIT_CONFIG_ERROR)
 
     def _resolve(name: str, cli_val: Any) -> Any:
         if cli_val is not None:
@@ -160,8 +193,13 @@ def main(
     weapon_val: str = _resolve("weapon", weapon)
     target_val: str = _resolve("target", target)
     users_val: str = _resolve("users", users)
+    artifact_dir_val: Path = Path(str(_resolve("artifact_dir", artifact_dir)))
     threshold_val: float = float(_resolve("threshold", threshold))
     fail_fast_val: bool = bool(_resolve("fail_fast", fail_fast))
+    format_val: str = str(_resolve("format", output_format)).lower()
+    if format_val not in ("yaml", "json"):
+        click.echo(f"error: invalid format '{format_val}' (expected yaml or json)", err=True)
+        sys.exit(EXIT_CONFIG_ERROR)
 
     operator_type = os.environ.get(_ENV_ATTACKER_TYPE, "")
     operator_key = os.environ.get(_ENV_ATTACKER_KEY, "")
@@ -189,7 +227,7 @@ def main(
             f"  export {_ENV_INSPECTOR_KEY}=sk-ant-...",
             err=True,
         )
-        sys.exit(1)
+        sys.exit(EXIT_CONFIG_ERROR)
 
     if arsenal:
         loaded_arsenal = _load_arsenal(arsenal)
@@ -206,9 +244,17 @@ def main(
     if users_path.exists():
         user_headers = to_user_headers(UsersConfig(**yaml.safe_load(users_path.read_text())))
 
-    attacker = create_attacker(operator_type, operator_key)
-    inspector = create_inspector(adversary_type, adversary_key)
+    try:
+        attacker = create_attacker(operator_type, operator_key)
+        inspector = create_inspector(adversary_type, adversary_key)
+    except ValueError as exc:
+        click.echo(f"error: {exc}", err=True)
+        sys.exit(EXIT_CONFIG_ERROR)
     executor = Drone(HttpApi(resolved_url, user_headers=user_headers))
+
+    plan_store = PlanStore(root=artifact_dir_val / "plans")
+    findings_store = FindingsStore(root=artifact_dir_val / "findings")
+    runs_dir = artifact_dir_val / "runs"
 
     blocked = False
     for inv in weapons or [None]:  # type: ignore[list-item]
@@ -222,13 +268,15 @@ def main(
                 target=tgt,
                 clearance_threshold=threshold_val,
                 fail_fast_tier=0 if fail_fast_val else None,
+                plan_store=plan_store,
+                findings_store=findings_store,
             )
 
             try:
                 run = runner.run()
             except Exception as exc:  # noqa: BLE001
                 click.echo(f"error: {exc}", err=True)
-                sys.exit(1)
+                sys.exit(EXIT_RUNTIME_ERROR)
 
             _print_one_line_summary(run)
             _print_progression_metrics(run)
@@ -242,7 +290,9 @@ def main(
             if run.holdout_results:
                 _print_holdout_summary(run.holdout_results)
 
-            click.echo(yaml.dump(run.model_dump(), sort_keys=False, allow_unicode=True))
+            serialized = _serialize_run(run, format_val)
+            click.echo(serialized)
+            _write_run_artifact(runs_dir, run, serialized, format_val)
 
             if clearance and clearance.recommendation == "block":
                 click.echo(f"clearance: BLOCKED — {clearance.rationale}", err=True)
@@ -251,7 +301,42 @@ def main(
                 click.echo(f"clearance: CONDITIONAL — {clearance.rationale}", err=True)
 
     if blocked:
-        sys.exit(1)
+        sys.exit(EXIT_BLOCKED)
+
+
+def _serialize_run(run: GauntletRun, output_format: str) -> str:
+    data = run.model_dump()
+    if output_format == "json":
+        return json.dumps(data, indent=2, default=str, ensure_ascii=False)
+    return yaml.dump(data, sort_keys=False, allow_unicode=True)
+
+
+_SLUG_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _slug(value: str | None, fallback: str) -> str:
+    """Lowercase + underscore-separated slug; empty values fall back to ``fallback``."""
+    if not value:
+        return fallback
+    slug = _SLUG_RE.sub("_", value.lower()).strip("_")
+    return slug or fallback
+
+
+def _write_run_artifact(
+    runs_dir: Path, run: GauntletRun, serialized: str, output_format: str
+) -> None:
+    """Persist the full run report at a deterministic path inside the artifact dir.
+
+    Layout: ``{artifact_dir}/runs/{weapon}__{target}.{ext}`` plus
+    ``{artifact_dir}/runs/latest.{ext}`` pointing at the most recent run.
+    """
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    ext = "json" if output_format == "json" else "yaml"
+    weapon_slug = _slug(run.weapon.id if run.weapon else None, "no_weapon")
+    target_slug = _slug(run.target.title if run.target else None, "no_target")
+    path = runs_dir / f"{weapon_slug}__{target_slug}.{ext}"
+    path.write_text(serialized)
+    (runs_dir / f"latest.{ext}").write_text(serialized)
 
 
 def _print_one_line_summary(run: GauntletRun) -> None:

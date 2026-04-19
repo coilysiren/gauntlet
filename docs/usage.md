@@ -80,6 +80,30 @@ users:
 
 See the [README](../README.md#user-authentication) for supported authentication types.
 
+## Validate YAML against JSON Schema
+
+Gauntlet ships JSON Schemas for every user-authored artifact under [`gauntlet/schemas/`](../gauntlet/schemas/): `weapon.schema.json`, `target.schema.json`, `arsenal.schema.json`, and `users.schema.json`. Planners can validate their output before running Gauntlet — useful in agentic-loop pipelines where malformed YAML would otherwise surface as a cryptic Pydantic error at runtime.
+
+```bash
+# One-shot validation with check-jsonschema (pipx install check-jsonschema)
+check-jsonschema --schemafile gauntlet/schemas/weapon.schema.json .gauntlet/weapons/*.yaml
+check-jsonschema --schemafile gauntlet/schemas/arsenal.schema.json .gauntlet/authz_arsenal.yaml
+```
+
+For editor autocomplete, point the [YAML Language Server](https://github.com/redhat-developer/yaml-language-server) at the schemas via `# yaml-language-server: $schema=...` at the top of a file, or via `.vscode/settings.json`:
+
+```json
+{
+  "yaml.schemas": {
+    "gauntlet/schemas/weapon.schema.json": ".gauntlet/weapons/*.yaml",
+    "gauntlet/schemas/target.schema.json": ".gauntlet/targets/*.yaml",
+    "gauntlet/schemas/users.schema.json": ".gauntlet/users.yaml"
+  }
+}
+```
+
+The schemas are generated from the Pydantic models — if you edit [`gauntlet/models.py`](../gauntlet/models.py) or [`gauntlet/auth.py`](../gauntlet/auth.py), regenerate with `uv run python scripts/export_schemas.py`. A drift test in [`tests/test_schemas.py`](../tests/test_schemas.py) fails CI if you forget.
+
 ## Configuration file
 
 All CLI options can be specified in a YAML config file. By default, Gauntlet loads `.gauntlet/config.yaml` if it exists. Use `--config` to point to a different file.
@@ -92,6 +116,7 @@ target: .gauntlet/targets
 users: .gauntlet/users.yaml
 threshold: 0.90
 fail_fast: true
+format: yaml      # or: json
 ```
 
 CLI flags always override values from the config file. For example, to use a config file but override the threshold:
@@ -140,9 +165,29 @@ Targets parsed from the spec are combined with any manually-defined targets from
 
 ## Run Gauntlet
 
+### Exit codes
+
+Gauntlet uses a stable exit-code taxonomy so orchestrators can distinguish "ran clean" from "found failures" from "Gauntlet itself errored":
+
+| Code | Meaning | When it fires |
+|---|---|---|
+| `0` | Clearance | Every weapon/target pair completed and no clearance gate recommended `block`. Safe to promote. |
+| `1` | Blocked by findings | Gauntlet ran to completion and at least one weapon/target pair returned a `block` recommendation. |
+| `2` | Runtime error | Gauntlet started running but an unexpected error interrupted it (LLM provider unreachable, adapter failure, unhandled exception in the runner). Retryable. |
+| `3` | Config / usage error | Gauntlet rejected its inputs before running (missing URL, missing env vars, unknown provider, malformed `--format`, config file not found). Not retryable without a config change. |
+
+Orchestrator guidance:
+
+- `0` — promote.
+- `1` — route the risk report's `confirmed_failures` back to the Planner (not the Worker). See [Multi-agent orchestration](#multi-agent-orchestration-dark-factory-style-loops).
+- `2` — retry with backoff; surface to a human after N attempts.
+- `3` — do not retry. The operator or the Orchestrator's config generator must fix the invocation.
+
+These codes are a contract: they will not change within a major version. Click's argument-parser errors (e.g. passing an unrecognized flag) bypass this taxonomy and exit with Click's default (`2`); this only trips a misconfigured orchestrator wrapper, not a deployed loop.
+
 ### CI pipeline
 
-Run after all tests pass. Treat a non-zero exit code as a build failure — do not promote.
+Run after all tests pass. Treat exit code `1` as "do not promote"; treat `2` or `3` as a broken build invocation, not a code-quality signal.
 
 ```yaml
 # Example GitHub Actions step

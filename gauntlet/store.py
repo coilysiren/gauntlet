@@ -16,7 +16,7 @@ class PlanStore:
     generated one.  Genuinely new plans are saved to disk for future runs.
     """
 
-    def __init__(self, root: str | Path = ".gauntlet/plans") -> None:
+    def __init__(self, root: str | Path = ".gauntlet/artifacts/plans") -> None:
         self._root = Path(root)
 
     def load(self, weapon_id: str) -> dict[str, Plan]:
@@ -65,7 +65,7 @@ class FindingsStore:
     and confirmed failures are all keyed to the weapon that produced them.
     """
 
-    def __init__(self, root: str | Path = ".gauntlet/findings") -> None:
+    def __init__(self, root: str | Path = ".gauntlet/artifacts/findings") -> None:
         self._root = Path(root)
 
     def load(self, weapon_id: str) -> list[Finding]:

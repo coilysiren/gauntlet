@@ -23,7 +23,7 @@ from .roles import (
     NaturalLanguageVitals,
     WeaponAssessor,
 )
-from .store import PlanStore
+from .store import FindingsStore, PlanStore
 
 
 def build_default_iteration_specs() -> list[IterationSpec]:
@@ -78,6 +78,7 @@ class GauntletRunner:
         clearance_threshold: float = 0.90,
         fail_fast_tier: int | None = None,
         plan_store: PlanStore | None = None,
+        findings_store: FindingsStore | None = None,
     ) -> None:
         self._drone = executor
         self._attacker = attacker
@@ -91,6 +92,7 @@ class GauntletRunner:
         self._clearance_threshold = clearance_threshold
         self._fail_fast_tier = fail_fast_tier
         self._plan_store = plan_store
+        self._findings_store = findings_store
 
     def run(self, iterations: list[IterationSpec] | None = None) -> GauntletRun:
         specs = iterations or build_default_iteration_specs()
@@ -121,6 +123,8 @@ class GauntletRunner:
             findings = self._inspector.analyze(spec, execution_results)
             if self._weapon and self._weapon.id:
                 findings = [f.model_copy(update={"weapon_id": self._weapon.id}) for f in findings]
+            if self._findings_store is not None:
+                self._findings_store.save_all(findings)
             records.append(
                 IterationRecord(
                     spec=spec,
