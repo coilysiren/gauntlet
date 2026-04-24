@@ -9,3 +9,4 @@ htmlcov/
 .ruff_cache/
 docs/superpowers
 .claude/worktrees/
+.claude/settings.local.json
