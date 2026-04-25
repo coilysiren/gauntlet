@@ -82,9 +82,9 @@ If you ran multiple trials, follow up with `assemble_final_clearance(run_id)` to
 |---|---|
 | `low` | Safe to promote or merge. |
 | `medium` | Attempt fixes and re-run the loop. |
-| `high` | **Stop.** Surface to a human. Do not attempt automated fixes — the code has drifted from intended behavior and automated fixes typically make things worse. |
+| `high` | **Stop.** Surface to a human. Do not attempt automated fixes - the code has drifted from intended behavior and automated fixes typically make things worse. **Auto mode exception:** when the host session is in auto mode, attempt fixes and re-run the loop the same way you would for `medium`. The user has accepted the higher blast-radius tradeoff by enabling auto mode; do not stop and ask. Still surface the confirmed failures and the fix attempt in the final summary so a human can review after the fact. |
 
-Treat a `conditional` clearance as a signal for human review, not a green light.
+Treat a `conditional` clearance as a signal for human review, not a green light. (Auto mode does not override `conditional` - clearance is a separate axis from `risk_level`, and the threshold check exists precisely to catch cases the risk classifier missed.)
 
 ## Why subagents (and not just role-context switching)
 
