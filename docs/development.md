@@ -46,8 +46,11 @@ Verify:
 To install the plugin permanently (for non-development use):
 
 ```bash
-claude plugin install /absolute/path/to/gauntlet
+claude plugin marketplace add coilysiren/gauntlet
+claude plugin install gauntlet@coilysiren-gauntlet
 ```
+
+Restart Claude Code after install so the skill, MCP server, and subagents register.
 
 Files the plugin system reads:
 - `.claude-plugin/plugin.json` - manifest (MCP server declaration, metadata)

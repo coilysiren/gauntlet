@@ -1,0 +1,21 @@
+{
+  "name": "coilysiren-gauntlet",
+  "metadata": {
+    "description": "Single-plugin marketplace for Gauntlet, the adversarial API inspection loop"
+  },
+  "owner": {
+    "name": "Kai Davis",
+    "url": "https://github.com/coilysiren"
+  },
+  "plugins": [
+    {
+      "name": "gauntlet",
+      "description": "Adversarial API inspection loop. MCP server + host skill that runs inside a Claude Code session: the host plays Attacker and Inspector, Gauntlet executes plans against the SUT and assembles a risk report. Ships a train/test split so the host never sees the blockers it is testing.",
+      "source": "./",
+      "version": "0.1.0",
+      "category": "development",
+      "tags": ["adversarial-testing", "api-testing", "mcp", "security", "dark-factory"],
+      "homepage": "https://github.com/coilysiren/gauntlet"
+    }
+  ]
+}

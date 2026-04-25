@@ -20,7 +20,9 @@ testing of my own infrastructure.
 
 Setup:
 1. If the gauntlet skill is not available in this session, install the plugin:
-     claude plugin install https://github.com/coilysiren/gauntlet
+     claude plugin marketplace add coilysiren/gauntlet
+     claude plugin install gauntlet@coilysiren-gauntlet
+   Then restart Claude Code so the skill registers.
    Then confirm with /mcp (server "gauntlet") and /agents (gauntlet-attacker,
    gauntlet-inspector, gauntlet-holdout-evaluator). If the plugin can't load
    in this harness, stop and tell me which harness you're in so I can switch
@@ -100,7 +102,9 @@ testing of my own infrastructure.
 
 Setup:
 1. If the gauntlet skill is not available in this session, install the plugin:
-     claude plugin install https://github.com/coilysiren/gauntlet
+     claude plugin marketplace add coilysiren/gauntlet
+     claude plugin install gauntlet@coilysiren-gauntlet
+   Then restart Claude Code so the skill registers.
    Then confirm with /mcp and /agents. If the plugin can't load in this
    harness, stop and tell me which harness you're in.
 

@@ -26,19 +26,24 @@ Because Gauntlet runs inside a Claude Code session, no Anthropic credentials are
 
 ## Install
 
-Gauntlet ships as a Claude Code plugin that bundles the MCP server and the host [skill](skills/gauntlet/SKILL.md) into one install:
+Gauntlet ships as a Claude Code plugin that bundles the MCP server and the host [skill](skills/gauntlet/SKILL.md) into one install. Add the marketplace, then install:
 
 ```bash
-claude plugin install https://github.com/coilysiren/gauntlet
+claude plugin marketplace add coilysiren/gauntlet
+claude plugin install gauntlet@coilysiren-gauntlet
 ```
 
-Or, for local development against a clone:
+Restart Claude Code after install so the skill, MCP server, and subagents register.
+
+Or, for local development against a clone (session-scoped, no install needed):
 
 ```bash
 git clone https://github.com/coilysiren/gauntlet
 cd your-project
 claude --plugin-dir path/to/gauntlet
 ```
+
+`--plugin-dir` is repeatable if you need to load several local plugins at once.
 
 On first invocation, `uv` auto-resolves the Python dependencies for the MCP server. Confirm the plugin is discovered with `/mcp` (for the server) and by trying a trigger phrase like "run gauntlet" (for the skill) inside Claude Code.
 
